@@ -338,7 +338,7 @@ function safeList(){
 let en={buf:"",p:"ask",back:"ask"},tTarget="note",hist=[],lastAns="",askCtx=null,askBack="main";
 const curBuf=()=>(level==="entry"||(level==="chars"&&tTarget!=="note"))?en.buf:tbuf;
 const WH={"Sleep and Death Carrying Sarpedon from the Battlefield":"Euphronios krater","New York Kouros":"Metropolitan Museum kouros New York Kouros","Doryphoros (Spear Bearer)":"Doryphoros","Gaul Killing Himself and His Wife":"Ludovisi Gaul","She Wolf":"Capitoline Wolf","Augustus of Primaporta":"Augustus of Prima Porta","Theseus after Killing the Minotaur":"Theseus Liberator fresco","Trajan's Basilica":"Basilica Ulpia","Constantine the Great":"Colossus of Constantine","Spotted Horses and Human Hands":"Pech Merle","Nanna Ziggurat":"Ziggurat of Ur","Stele of Naram-Sin":"Victory Stele of Naram-Sin","Law Code of Hammurabi":"Code of Hammurabi","Ashurnasirpal II Hunting Lions":"Lion hunt of Ashurnasirpal II relief","Palette of Narmer":"Narmer Palette","Great Pyramids at Giza and Great Sphinx":"Giza pyramid complex","Akhenaten and Nefertiti Worshipping the Aton":"Akhenaten","Bust of Nefertiti":"Nefertiti Bust","Funerary Mask of Tutankhamen":"Mask of Tutankhamun","Cycladic Head":"Cycladic art","Palace at Knossos":"Knossos","Toreador Fresco":"Bull-Leaping Fresco","Lion Gate":"Lion Gate Mycenae","Pantheon":"Pantheon, Rome","Laocoön Group":"Laocoön and His Sons","Sarcophagus from Cerveteri":"Sarcophagus of the Spouses","Nike of Samothrace":"Winged Victory of Samothrace","Pont du Gard":"Pont du Gard","Parthenon":"Parthenon"};
-const fetchJ=async(u,o)=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);try{const r=await fetch(u,{...o,signal:c.signal});if(!r.ok)throw new Error(r.status);return r}finally{clearTimeout(t)}};
+const fetchJ=async(u,o)=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);try{const r=await fetch(u,{...o,signal:c.signal});if(!r.ok)throw new Error(r.status+" from "+new URL(u).hostname);return r}finally{clearTimeout(t)}};
 async function wiki(q,hint){
  say("Looking that up");
  try{
@@ -358,11 +358,32 @@ function sysPrompt(){
  return s;
 }
 const aiSummary=()=>"Style: "+STY[S.aiStyle|0][0]+". Length limit: "+(S.aiMax?S.aiMax+" characters":"none")+". Custom instructions: "+(S.aiCustom||"none")+".";
+let aiLog=[],aiUsed="";
+const aiHelp=()=>S.geminiKey?"Check that your key is correct and that your internet works.":"The free service may have stopped free access. You can add a free Google Gemini key in AI settings, which is more reliable.";
+const badNotice=a=>a.length<700&&/(pollinations|deprecat|api key|legacy|sign up)/i.test(a);
 async function aiCall(sys,msgs){
- let ans="";
- try{const j=await (await fetchJ("https://text.pollinations.ai/openai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"openai-fast",messages:[{role:"system",content:sys},...msgs]})})).json();ans=j.choices[0].message.content||""}catch(e){}
- if(!ans)try{ans=await (await fetchJ("https://text.pollinations.ai/"+encodeURIComponent(sys+"\n\n"+msgs.map(m=>m.content).join("\n")).slice(0,6000))).text()}catch(e){}
- return (ans||"").trim();
+ aiLog=[];aiUsed="";let ans="";
+ if(S.geminiKey){
+  try{
+   const j=await (await fetchJ("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key="+encodeURIComponent(S.geminiKey),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}))})})).json();
+   ans=((j.candidates&&j.candidates[0].content.parts)||[]).map(p=>p.text||"").join("").trim();if(ans)aiUsed="Gemini";
+  }catch(e){aiLog.push("Gemini: "+((e&&e.message)||"failed"))}
+ }
+ if(!ans)try{
+  const j=await (await fetchJ("https://text.pollinations.ai/openai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"openai-fast",messages:[{role:"system",content:sys},...msgs]})})).json();
+  ans=(j.choices[0].message.content||"").trim();if(badNotice(ans)){aiLog.push("Pollinations sent a notice instead of an answer");ans=""}else if(ans)aiUsed="Pollinations";
+ }catch(e){aiLog.push("Pollinations: "+((e&&e.message)||"failed"))}
+ if(!ans)try{
+  ans=(await (await fetchJ("https://gen.pollinations.ai/text/"+encodeURIComponent(sys+"\n\n"+msgs.map(m=>m.content).join("\n")).slice(0,6000))).text()).trim();
+  if(badNotice(ans)){aiLog.push("Pollinations new: notice instead of an answer");ans=""}else if(ans)aiUsed="Pollinations";
+ }catch(e){aiLog.push("Pollinations new: "+((e&&e.message)||"failed"))}
+ return ans;
+}
+async function aiTest(){
+ say("Testing the AI. This can take a few seconds.",true);
+ const a=await aiCall("Reply with only the word OK.",[{role:"user",content:"Test"}]);
+ const m=a?"The AI works, using "+aiUsed+". It said: "+a.slice(0,80):"The AI test failed. "+(aiLog.length?aiLog.join(". ")+". ":"")+aiHelp();
+ show(m);say(m,true);
 }
 function capLen(a){
  if(!S.aiMax||a.length<=S.aiMax)return a;
@@ -374,24 +395,25 @@ async function askAI(q){
  hist.push({role:"user",content:q});show("You: "+q+"\n\nThinking...");say("Thinking");
  const pulse=setInterval(()=>tick(400,.03),2000);
  let ans=await aiCall(sysPrompt(),hist.slice(-8));clearInterval(pulse);
- if(!ans){hist.pop();say("I couldn't reach the AI. Check your internet connection or try again later.");return}
+ if(!ans){hist.pop();say("I couldn't reach the AI. "+aiHelp()+" You can run the AI test in AI settings.");return}
  ans=capLen(ans);hist.push({role:"assistant",content:ans});lastAns=ans;
  show("You: "+q+"\n\n"+ans);say(ans);
 }
 function submit(){
  if(en.p==="ask"){en.back="ask";level="ask";render();askAI(en.buf)}
+ else if(en.p==="key"){S.geminiKey=en.buf.trim();saveS();level="aiset";render();say(S.geminiKey?"Key saved. Choose Test the AI to check it.":"Key cleared")}
  else{S.aiCustom=en.buf.trim();saveS();level="aiset";render();say("Saved instructions")}
 }
 function entryList(){
  tTarget="entry";
- const up=caps||/(^|[.!?]\s)$/.test(en.buf),ask=en.p==="ask";
+ const up=en.p!=="key"&&(caps||/(^|[.!?]\s)$/.test(en.buf)),ask=en.p==="ask";
  const L=[..."abcdefghijklmnopqrstuvwxyz"].map((ch,k)=>{const c2=up?ch.toUpperCase():ch;return {l:c2,s:LN[k],c:()=>typed(c2,LN[k])}});
  L.push(GI("Space",()=>typed(" ","space")),go("Characters","chars","Characters."),GI("Keyboard",kbOn),
   GI(ask?"Speak your question":"Speak instructions",()=>voiceText(t=>{en.buf=t;submit()})),
   GI("Delete",()=>{en.buf=en.buf.slice(0,-1);render();say("Deleted")}),
   GI("Read",()=>say(en.buf.trim()||"Nothing typed yet")),
   GI("Clear",()=>{en.buf="";render();say("Cleared")}),
-  GI(ask?"Send question":"Save instructions",submit),backTo(en.back));
+  GI(ask?"Send question":en.p==="key"?"Save key":"Save instructions",submit),backTo(en.back));
  return L;
 }
 const openEntry=(p,back,msg,init)=>{en={buf:init||"",p,back};level="entry";pos.entry=0;render();say(msg)};
@@ -412,6 +434,8 @@ function aiSetList(){
   GI("No length limit",()=>{S.aiMax=0;saveS();render();say("No length limit")}),
   GI("Type custom instructions",()=>openEntry("instr","aiset","Type your instructions. Choose Save instructions when done.",S.aiCustom||"")),
   GI("Speak custom instructions",()=>voiceText(t=>{S.aiCustom=t.trim();saveS();render();say("Saved. "+S.aiCustom)})),
+  GI(S.geminiKey?"Gemini key: saved":"Add Gemini key",()=>openEntry("key","aiset","Type or paste your Gemini key. Tap Keyboard to paste it with your phone keyboard, then choose Save key.")),
+  GI("Remove Gemini key",()=>{S.geminiKey="";saveS();render();say("Key removed")}),GI("Test the AI",aiTest),
   GI("Read my settings",()=>say(aiSummary())),
   GI("Clear custom instructions",()=>{S.aiCustom="";saveS();render();say("Cleared")}),backTo("ask")];
 }
@@ -666,7 +690,7 @@ function panicToggle(){
 document.addEventListener("mousedown",e=>{if(e.button===0)downT=Date.now()});
 function exportBackup(){
  try{
-  const d={v:1,notes,settings:S,melody,mbpm,draft:tbuf,react:rBest};
+  const d={v:1,notes,settings:{...S,geminiKey:undefined},melody,mbpm,draft:tbuf,react:rBest};
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:"application/json"}));a.download="mouse-menu-backup.json";
   document.body.appendChild(a);a.click();setTimeout(()=>{try{URL.revokeObjectURL(a.href);a.remove()}catch(e){}},2000);
   say("Backup saved to your downloads. It has your notes, settings, and melody, but not imported audio.");
@@ -852,7 +876,7 @@ function disp(){$("expr").textContent=(level==="eq"||level==="eqmore")?expr.repl
 function show(d){$("detail").textContent=d||""}
 function render(){
  const L=list();if(pos[level]>=L.length)pos[level]=0;const i=pos[level],it=L[i];
- $("crumb").textContent=({main:"Menu",art:cur&&cur.t,eq:"Equation",notes:"Notes",gallery:"Art",clock:"Clock",timers:"Timers",custom:"Custom timer",stopwatch:"Stopwatch",fun:"Fun",cats:"Artworks",guide:curC&&curC.t,vocab:"Vocabulary",term:curT&&curT.t,flash:"Flashcards",eqmore:"More symbols",music:"Music maker",metro:"Metronome",games:"Games",musictab:"Music",rand:"Randomizers",guess:"Guess the number",time:"Timeline game",ask:(askCtx?"Ask AI · "+askCtx.t:"Ask AI"),entry:(en.p==="ask"?"Ask AI":"AI instructions"),aiset:"AI settings",taker:"AI note taker",compass:"Compass",note:"Note",suggest:"Suggestions",bship:"Audio battleship",maze:"Audio maze",morse:"Morse code",mlearn:"Learn Morse",mquiz:"Morse quiz",mkey:"Telegraph key",pitchmenu:"Perfect pitch",learn:"Learn notes",pitch:"Pitch quiz",react:"Reaction time",safe:"Safe cracker",drums:"Drum pad",convert:"Converter",convnum:conv&&conv.n,settings:"Settings",audio:"Audio",slot:"Audio slot "+(curSlot+1),typing:"Typing",chars:"Characters",ctrl:"Controls"})[level]+(mutedAll?" · 🔇 all muted":muted?" · 🔇 muted":"")+(MIC.run?" · 🎤"+(qaOn?" quick answers":recording?" recording":""):"");
+ $("crumb").textContent=({main:"Menu",art:cur&&cur.t,eq:"Equation",notes:"Notes",gallery:"Art",clock:"Clock",timers:"Timers",custom:"Custom timer",stopwatch:"Stopwatch",fun:"Fun",cats:"Artworks",guide:curC&&curC.t,vocab:"Vocabulary",term:curT&&curT.t,flash:"Flashcards",eqmore:"More symbols",music:"Music maker",metro:"Metronome",games:"Games",musictab:"Music",rand:"Randomizers",guess:"Guess the number",time:"Timeline game",ask:(askCtx?"Ask AI · "+askCtx.t:"Ask AI"),entry:(en.p==="ask"?"Ask AI":en.p==="key"?"Gemini key":"AI instructions"),aiset:"AI settings",taker:"AI note taker",compass:"Compass",note:"Note",suggest:"Suggestions",bship:"Audio battleship",maze:"Audio maze",morse:"Morse code",mlearn:"Learn Morse",mquiz:"Morse quiz",mkey:"Telegraph key",pitchmenu:"Perfect pitch",learn:"Learn notes",pitch:"Pitch quiz",react:"Reaction time",safe:"Safe cracker",drums:"Drum pad",convert:"Converter",convnum:conv&&conv.n,settings:"Settings",audio:"Audio",slot:"Audio slot "+(curSlot+1),typing:"Typing",chars:"Characters",ctrl:"Controls"})[level]+(mutedAll?" · 🔇 all muted":muted?" · 🔇 muted":"")+(MIC.run?" · 🎤"+(qaOn?" quick answers":recording?" recording":""):"");
  $("count").textContent=(i+1)+" of "+L.length;
  $("item").textContent=it.l;
  show(detailFor());
