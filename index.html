@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mouse Audio Menu</title>
+<style>
+:root{--bg:#fff;--fg:#111;--acc:#2563eb;--mut:#666;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee;--acc:#60a5fa;--mut:#999}}
+:root[data-theme="dark"]{--bg:#111;--fg:#eee;--acc:#60a5fa;--mut:#999}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;user-select:none;overflow:hidden}
+#crumb{color:var(--mut);font-size:1rem}
+#count{color:var(--mut);font-size:.9rem;margin:.25rem 0 1rem}
+#item{font-size:clamp(2rem,10vw,5rem);font-weight:700;color:var(--acc);padding:0 1rem}
+#detail{white-space:pre-wrap;max-height:35vh;overflow:auto;font-size:1.2rem;max-width:30em;margin-top:1.25rem;padding:0 1.5rem;min-height:3em}
+#expr{font-family:ui-monospace,monospace;font-size:1.8rem;margin-top:1rem;min-height:2.2rem;word-break:break-all;padding:0 1rem}
+#hint{position:absolute;bottom:1.5rem;color:var(--mut);font-size:.9rem;padding:0 1rem}
+html.novis,body.novis{background:#000!important;cursor:none!important}
+body.novis>*{visibility:hidden!important}
+body.novis>#ki{visibility:visible!important}
+</style>
+</head>
+<body>
+<div id="crumb">Menu</div>
+<div id="count">Click to start</div>
+<div id="item">🔊</div>
+<div id="detail">Click once anywhere to begin.</div>
+<div id="expr"></div>
+<div id="hint">Scroll = move · Left click = choose · Right click = back · Middle click = controls</div>
+<script>
+const key=s=>s.replace(/^the /i,'');
+const W=t=>t.trim().split("\n").map(l=>{const[t,culture,date,medium,loc,desc]=l.split("|");return{t,culture,date,medium,loc,desc}}).sort((a,b)=>key(a.t).localeCompare(key(b.t)));
+const V=a=>a.sort((x,y)=>x[0].localeCompare(y[0]));
+let curG=null;
+const guides=[
+{t:"Ancient Greece, Etruria, and Rome",vocab:V([
+["Amphora","A tall ancient Greek storage jar with two handles and a narrow neck, used for wine, oil, and other goods."],
+["Contrapposto","A pose where a standing figure puts its weight on one leg, so the hips and shoulders tilt and the body looks relaxed and natural."],
+["Frieze","A horizontal band of sculpture or decoration, often running along the top of a wall or building."],
+["Metope","A square panel, often carved with a scene, set between triglyphs in the frieze of a Doric temple."],
+["Oculus","A round opening at the top of a dome, like the one in the Pantheon."],
+["Pediment","The triangular gable at the top of the front of a Greek temple, often filled with sculpture."],
+["Round arch","A curved arch shaped like a half circle, used by the Romans in bridges, aqueducts, and buildings."]]),
+works:W(`
+Sleep and Death Carrying Sarpedon from the Battlefield|Archaic Period (Greek)|Early 6th century BCE (515 BCE)|Red-figure calyx-krater (painted ceramic)||Painted by Euphronios. Winged Sleep and Death lift the fallen hero Sarpedon from the battle at Troy.
+New York Kouros|Archaic Period (Greek)|Around 600 BCE|Marble||A stiff, nude standing young man with one foot forward and arms at his sides. It shows Egyptian influence and probably marked a grave.
+Doryphoros (Spear Bearer)|Classical Period (Greek)|Early 5th century BCE (420 BCE)|Marble (Roman copy after the original bronze)||By Polykleitos. An ideal athlete in contrapposto that follows his rules of proportion, called the Canon.
+Parthenon|Classical Period (Greek)|Mid 5th century BCE (440 BCE)|Marble|Acropolis, Athens, Greece|A Doric temple to the goddess Athena, decorated with a sculpted frieze, pediments, and metopes.
+Gaul Killing Himself and His Wife|Hellenistic Period (Greek)|Early 3rd century BCE (220 BCE)|Marble (Roman copy after the original bronze)||A defeated Gaul stabs himself after killing his wife to avoid capture. It has the drama and emotion of Hellenistic style.
+Nike of Samothrace|Hellenistic Period (Greek)|Late 2nd century BCE (180 BCE)|Marble|Sanctuary of the Great Gods, Samothrace, Greece|The goddess of victory lands on the prow of a ship, with wind-swept drapery that shows motion and drama.
+Laocoön Group|Hellenistic Period (Greek)|Early 1st century BCE (25 BCE)|Marble (Roman copy of a Greek Hellenistic statue)||A Trojan priest and his sons are attacked by sea serpents, in twisting, emotional poses.
+Sarcophagus from Cerveteri|Etruscan|Early 6th century BCE (520 BCE)|Painted terracotta|Cerveteri, Italy|A husband and wife smile as they recline together as if at a banquet. It shows the Etruscan view of the afterlife.
+She Wolf|Roman (Etruscan work)|Around 500 BCE|Bronze||A bronze wolf, the symbol of Rome. The twins Romulus and Remus were added much later.
+Augustus of Primaporta|Roman|Around 1st century CE|Marble||Emperor Augustus in a general's armor, idealized like a Greek hero, with Cupid at his leg to link him to the gods.
+Colosseum|Roman|Late 1st century CE (75 CE)|Concrete faced with travertine|Rome, Italy|A huge oval amphitheater for gladiator games, built with concrete and stacked arcades of round arches.
+Pont du Gard|Roman|1st century CE|Limestone blocks|Nimes, France|A Roman aqueduct bridge with three tiers of round arches, built to carry water.
+Theseus after Killing the Minotaur|Roman|Around 1st century CE|Fresco|Pompeii, Italy|The hero Theseus stands after killing the Minotaur while grateful youths thank him. A Roman wall painting.
+Trajan's Basilica|Roman|Early 2nd century CE (110 CE)||Forum of Trajan, Rome, Italy|A large public hall for law and business, with a central nave, side aisles, and apses.
+Pantheon|Roman|Early 2nd century CE (120 CE)|Concrete|Rome, Italy|A Roman temple with a huge concrete dome and an oculus at the top that lets in light.
+Constantine the Great|Roman|Early 4th century CE (325 CE)|Marble|Basilica of Maxentius and Constantine, Rome, Italy|Parts of a giant seated statue, with huge eyes gazing upward in a more spiritual, less realistic style.
+Arch of Constantine|Roman|Early 4th century CE (around 313 CE)|Marble (with reused sculpture)|Rome, Italy|A triumphal arch honoring Constantine's victory, decorated partly with sculptures reused from earlier emperors.
+`)},
+{t:"The Ancient World",vocab:V([
+["Stele","An upright stone slab carved with images or writing, often used as a monument or marker."],
+["Ziggurat","A massive stepped temple tower built by Mesopotamian cultures such as the Sumerians."]]),
+works:W(`
+Venus of Willendorf|Paleolithic Period|Around 25,000 BCE|Limestone|Willendorf, Austria (Western Europe)|A small figure of a woman with an exaggerated body and no face, possibly connected to fertility.
+Spotted Horses and Human Hands|Paleolithic Period|Around 25,000 to 24,000 BCE|Mineral pigments on a cave wall|Pech-Merle Cave, France|Spotted horses painted on a cave wall with human hand prints around them.
+Nanna Ziggurat|Sumerian culture|Around 2100 BCE|Mud brick with a baked brick facing|Ur, Iraq|A huge stepped temple tower for the moon god Nanna, with staircases leading up to a shrine.
+Warka Vase|Sumerian culture|31st century BCE (3300 to 3000 BCE)|Alabaster|Warka, Iraq|Carved in bands that show offerings being brought to the goddess Inanna.
+Stele of Naram-Sin|Akkadian culture|Early 22nd century BCE (2220 BCE)|Stone||King Naram-Sin, larger than everyone, climbs a mountain over defeated enemies, wearing a horned helmet to show he is divine.
+Law Code of Hammurabi|Babylonian culture|Mid 18th century BCE (1750 BCE)|Basalt||A tall stele with laws carved in cuneiform. At the top, King Hammurabi stands before the sun god Shamash.
+Ashurnasirpal II Hunting Lions|Assyrian culture|Mid 9th century BCE (860 BCE)|Alabaster relief|Nimrud, Iraq|A palace relief of the king shooting lions from a chariot to show his power.
+Palette of Narmer|Egypt, Early Dynastic Period|Around 3000 BCE|Greywacke (stone)|Egypt|King Narmer wears the crowns of Upper and Lower Egypt, showing the unification of Egypt. It has some of the earliest hieroglyphs.
+Great Pyramids at Giza and Great Sphinx|Egypt, Old Kingdom|Around 2500 BCE|Limestone|Giza, Egypt|Huge royal tombs for pharaohs, guarded by the Great Sphinx, which has a lion's body and a human head.
+Akhenaten and Nefertiti Worshipping the Aton|Egypt, New Kingdom|Mid 14th century BCE (1365 to 1349 BCE)|Relief carving||The royal family worships the sun disk Aton, whose rays end in hands. The soft, curving style breaks from traditional Egyptian art.
+Bust of Nefertiti|Egypt, New Kingdom|Early 14th century BCE (around 1330 BCE)|Painted limestone with stucco|Amarna, Egypt|By the sculptor Thutmose. A famous portrait of Queen Nefertiti with a long elegant neck and tall crown.
+Funerary Mask of Tutankhamen|Egypt, New Kingdom|1333 to 1323 BCE|Gold with inlaid glass and stones|Tomb of Tutankhamen, Egypt|A gold mask placed over the pharaoh's mummy, with the royal headdress and false beard.
+Cycladic Head|Aegean, Cycladic culture|2700 to 2300 BCE|Marble|Cycladic islands, Greece|A simple, smooth, flat marble head with a long nose and no mouth, probably part of a full figure.
+Palace at Knossos|Aegean, Minoan culture|1500 BCE|Stone, wood, and plaster|Crete, Greece|A maze-like palace complex with reconstructed red columns that are wider at the top than the bottom.
+Toreador Fresco|Aegean, Minoan culture|Around 1500 BCE|Fresco (wall painting)|Palace at Knossos, Crete, Greece|A figure leaps over a charging bull while two others help, showing Minoan bull-leaping.
+Lion Gate|Aegean, Mycenaean culture|Mid 13th century BCE (1250 BCE)|Limestone|Citadel at Mycenae, Greece|Two lions flank a column above the main entrance of the fortified citadel.
+`)}
+].sort((a,b)=>key(a.t).localeCompare(key(b.t)));
+
+
+const SYM={"+":"plus","-":"minus","*":"times","/":"divided by","^":"to the power of","√(":"square root of","(":"open parenthesis",")":"close parenthesis",".":"point","=":"equals","π":"pi"};
+const eqItems=["0","1","2","3","4","5","6","7","8","9","+","-","*","/","."];
+const SHOW={"*":"×","/":"÷","√(":"√"};
+let level="main",pos={taker:0,compass:0,aiset:0,note:0,suggest:0,ask:0,entry:0,main:0,art:0,eq:0,notes:0,ctrl:0,gallery:0,guide:0,vocab:0,cats:0,term:0,flash:0,eqmore:0,music:0,metro:0,games:0,musictab:0,rand:0,bship:0,maze:0,morse:0,mlearn:0,mquiz:0,mkey:0,pitchmenu:0,learn:0,pitch:0,react:0,safe:0,guess:0,time:0,online:0,ask:0,entry:0,weather:0,drums:0,clock:0,timers:0,custom:0,stopwatch:0,fun:0,convert:0,convnum:0,settings:0,audio:0,slot:0,typing:0,chars:0},muted=false,mutedAll=false,dead=false,panic=false,recording=false,from="main",S={rate:.95,vol:1,voice:""},cur=null,expr="",started=false,lastWheel=0,acc=0;
+const $=id=>document.getElementById(id);
+
+const ALL=guides.flatMap(g=>g.works);
+const byT=n=>ALL.find(w=>w.t===n);
+const CATS=[
+["Painting (2D)",["Spotted Horses and Human Hands","Theseus after Killing the Minotaur","Toreador Fresco","Sleep and Death Carrying Sarpedon from the Battlefield"]],
+["Relief and Stele",["Akhenaten and Nefertiti Worshipping the Aton","Ashurnasirpal II Hunting Lions","Law Code of Hammurabi","Palette of Narmer","Stele of Naram-Sin","Warka Vase"]],
+["Sculpture (3D)",["Augustus of Primaporta","Bust of Nefertiti","Constantine the Great","Cycladic Head","Doryphoros (Spear Bearer)","Funerary Mask of Tutankhamen","Gaul Killing Himself and His Wife","Laocoön Group","New York Kouros","Nike of Samothrace","Sarcophagus from Cerveteri","She Wolf","Venus of Willendorf"]],
+["Architecture",["Arch of Constantine","Colosseum","Great Pyramids at Giza and Great Sphinx","Lion Gate","Nanna Ziggurat","Palace at Knossos","Pantheon","Parthenon","Pont du Gard","Trajan's Basilica"]]
+].map(([t,n])=>({t,works:n.map(byT).sort((a,b)=>key(a.t).localeCompare(key(b.t)))}));
+const TW={Contrapposto:["Doryphoros (Spear Bearer)","Augustus of Primaporta"],Frieze:["Parthenon","Arch of Constantine"],Metope:["Parthenon"],Oculus:["Pantheon"],Pediment:["Parthenon","Pantheon"],"Round arch":["Colosseum","Pont du Gard","Arch of Constantine"],Stele:["Stele of Naram-Sin","Law Code of Hammurabi"],Ziggurat:["Nanna Ziggurat"]};
+const NOTE={Amphora:"Note: none of the key works is an amphora, but the Sleep and Death krater is a related kind of Greek vase."};
+const VOCAB=guides.flatMap(g=>g.vocab).sort((x,y)=>x[0].localeCompare(y[0])).map(([t,d])=>({t,d,note:NOTE[t],works:(TW[t]||[]).map(byT).filter(Boolean).sort((a,b)=>key(a.t).localeCompare(key(b.t)))}));
+let curC=null,curT=null,artBack="guide",fc=null;
+function openArt(a,back){cur=a;artBack=back;level="art";pos.art=0;render();say(a.t+". Scroll for details.")}
+const nmT=t=>t==="="?"equal sign":(SYM[t]||t);
+const typT=t=>({l:SHOW[t]||t,s:nmT(t),c:()=>{expr+=(/[+\-*\/^=]/.test(t)?" "+t+" ":t);disp();say(nmT(t))}});
+const eqMore=["^","√(","(",")","x","=","π"];
+function eqMoreList(){return [...eqMore.map(typT),backTo("eq")]}
+function flashList(){
+ const I=(l,c)=>({l,s:l,c}),rnd=a=>a[Math.floor(Math.random()*a.length)];
+ return [
+  I("New artwork card",()=>{const w=rnd(ALL);fc={k:"w",w};const m="Which artwork is this? "+w.desc;show(m);say(m)}),
+  I("New vocab card",()=>{const v=rnd(VOCAB);fc={k:"v",v};const m="Which term is this? "+v.d;show(m);say(m)}),
+  I("Reveal answer",()=>{
+   if(!fc){say("Pick a card first");return}
+   const m=fc.k==="w"?fc.w.t+". "+fc.w.culture+". "+fc.w.date+". "+(fc.w.medium||""):fc.v.t+(fc.v.works.length?". Used in "+fc.v.works.map(w=>w.t).join(", "):"");
+   show(m);say(m);
+  }),
+  backTo("gallery")];
+}
+const MN=[["C",261.63],["D",293.66],["E",329.63],["F",349.23],["G",392],["A",440],["B",493.88]];
+const NOTES=[];[1,2].forEach(o=>MN.forEach(([n,f])=>NOTES.push({n:n+(o>1?" high":""),f:f*o})));NOTES.push({n:"High C",f:1046.5});
+let melody=[],inst=0,mbpm=120,bpm=100,metroT=null;
+const INST=[["Soft","sine"],["Mellow","triangle"],["Chiptune","square"],["Buzzy","sawtooth"]];
+try{melody=JSON.parse(localStorage.getItem("mm_melody")||"[]");mbpm=+localStorage.getItem("mm_mbpm")||120}catch(e){}
+const saveMel=()=>{try{localStorage.setItem("mm_melody",JSON.stringify(melody));localStorage.setItem("mm_mbpm",mbpm)}catch(e){}};
+const tempoItems=(get,set)=>[["Faster by 10",10],["Faster by 1",1],["Slower by 10",-10],["Slower by 1",-1]].map(([l,d])=>({l,s:l,c:()=>{set(Math.max(1,get()+d));render();say(get()+" beats per minute")}}));
+function tone(f,dur,v){
+ if(muted||!f)return;
+ try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;
+  o.type=INST[inst][1];o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.2*S.vol*(v||1),t+.02);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.05)}catch(e){}
+}
+function musicList(){
+ const I=(l,c)=>({l,s:l,c}),info=()=>show("Melody: "+melody.length+" notes · "+mbpm+" beats per minute");
+ const L=NOTES.map(n=>({l:n.n,s:n.n,p:()=>tone(n.f,.35,.6),c:()=>{melody.push(n.f);saveMel();tone(n.f,.5);info()}}));
+ L.push(I("Rest",()=>{melody.push(0);saveMel();info();say("Rest")}),
+  I("Play melody",()=>{if(!melody.length){say("Melody is empty");return}const ms=60000/mbpm;melody.forEach((f,k)=>setTimeout(()=>tone(f,Math.min(2,ms/1000*.95)),k*ms))}),
+  I("Undo last note",()=>{melody.pop();saveMel();info();say("Undone")}),
+  I("Clear melody",()=>sure("mclr","Click again to clear the melody",()=>{melody=[];saveMel();render();say("Cleared")})),
+  I("Sound: "+INST[inst][0],()=>{inst=(inst+1)%INST.length;render();tone(440,.4);say(INST[inst][0])}),
+  ...tempoItems(()=>mbpm,v=>{mbpm=v;saveMel()}),backTo("musictab"));
+ return L;
+}
+const metroBeat=()=>tick(1000,.1);
+function metroList(){
+ return [{l:metroT?"Stop":"Start",s:metroT?"Stop":"Start",c:()=>{if(metroT){clearInterval(metroT);metroT=null;render();say("Stopped")}else{metroT=setInterval(metroBeat,60000/bpm);render();say("Started")}}},
+  ...tempoItems(()=>bpm,v=>{bpm=v;if(metroT){clearInterval(metroT);metroT=setInterval(metroBeat,60000/bpm)}}),backTo("musictab")];
+}
+const DR=["Kick","Snare","Hi-hat","Clap","Tom","Cymbal"];
+let noiseB=null,beat=[],brec=false,bstart=0,bloop=false,bT=[],bPlay=false;
+function drum(n,v){
+ if(muted)return;
+ try{
+  ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();const t=ctx.currentTime,vol=S.vol*(v||1);
+  if(!noiseB){noiseB=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);const d=noiseB.getChannelData(0);for(let k=0;k<d.length;k++)d[k]=Math.random()*2-1}
+  const env=(g,a,dur)=>{g.gain.setValueAtTime(a*vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur)};
+  const osc=(f0,f1,dur,a)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+dur);env(g,a,dur);o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.02)};
+  const noise=(type,f,dur,a)=>{const s=ctx.createBufferSource();s.buffer=noiseB;const b=ctx.createBiquadFilter();b.type=type;b.frequency.value=f;const g=ctx.createGain();env(g,a,dur);s.connect(b);b.connect(g);g.connect(ctx.destination);s.start(t);s.stop(t+dur+.02)};
+  if(n==="Kick")osc(150,40,.3,1);
+  else if(n==="Snare"){osc(220,120,.12,.5);noise("highpass",1500,.2,.7)}
+  else if(n==="Hi-hat")noise("highpass",7000,.07,.4);
+  else if(n==="Clap")noise("bandpass",1500,.15,.8);
+  else if(n==="Tom")osc(200,90,.3,.9);
+  else noise("highpass",5000,.8,.35);
+ }catch(e){}
+}
+function stopBeat(){bT.forEach(clearTimeout);bT=[];bPlay=false}
+function playBeat(){
+ if(!beat.length){say("No beat recorded yet");return}
+ stopBeat();bPlay=true;
+ const run=()=>{beat.forEach(h=>bT.push(setTimeout(()=>drum(h.d),h.t)));bT.push(setTimeout(()=>{if(bloop&&bPlay)run();else bPlay=false},beat[beat.length-1].t+600))};
+ run();
+}
+function drumsList(){
+ const I=(l,c)=>({l,s:l,c});
+ const L=DR.map(n=>({l:n,s:n,p:()=>drum(n,.5),c:()=>{drum(n);if(brec){if(!beat.length)bstart=Date.now();beat.push({d:n,t:Date.now()-bstart})}}}));
+ L.push(I(brec?"Stop recording":"Record beat",()=>{if(brec){brec=false;render();say("Recorded "+beat.length+" hits")}else{beat=[];brec=true;render();say("Recording. Your first hit starts the beat.")}}),
+  I("Play beat",playBeat),I("Stop beat",()=>{stopBeat();say("Stopped")}),
+  I("Loop: "+(bloop?"on":"off"),()=>{bloop=!bloop;render();say("Loop "+(bloop?"on":"off"))}),
+  I("Clear beat",()=>{stopBeat();beat=[];brec=false;render();say("Cleared")}),backTo("musictab"));
+ return L;
+}
+let gT=0,gR=100,gN=0,gbuf="";
+const gNew=()=>{gT=1+Math.floor(Math.random()*gR);gN=0;gbuf=""};gNew();
+function guessList(){
+ const I=(l,c)=>({l,s:l,c});
+ return [...[..."0123456789"].map(d=>I(d,()=>{gbuf+=d;render();say(d)})),
+  I("Guess",()=>{
+   const g=parseInt(gbuf,10);if(isNaN(g)){say("Type a number first");return}
+   gN++;gbuf="";let m;
+   if(g===gT){m="Correct! "+g+" in "+gN+(gN===1?" try":" tries")+". Starting a new game.";gNew()}
+   else m=g+" is too "+(g<gT?"low. Go higher.":"high. Go lower.");
+   render();show(m);say(m);
+  }),
+  I("Delete",()=>{gbuf=gbuf.slice(0,-1);render();say("Deleted")}),
+  I("Clear",()=>{gbuf="";render();say("Cleared")}),
+  I("Range: 1 to "+gR,()=>{gR=gR===10?100:gR===100?1000:10;gNew();render();say("New game. Range is 1 to "+gR)}),
+  I("New game",()=>{gNew();render();say("New game. Pick a number from 1 to "+gR)}),
+  I("Give up",()=>{const m="The number was "+gT+". Starting a new game.";gNew();render();show(m);say(m)}),
+  backTo("games")];
+}
+const YR={"Sleep and Death Carrying Sarpedon from the Battlefield":-515,"New York Kouros":-600,"Doryphoros (Spear Bearer)":-420,"Parthenon":-440,"Gaul Killing Himself and His Wife":-220,"Nike of Samothrace":-180,"Laocoön Group":-25,"Sarcophagus from Cerveteri":-520,"She Wolf":-500,"Augustus of Primaporta":25,"Colosseum":75,"Pont du Gard":50,"Theseus after Killing the Minotaur":50,"Trajan's Basilica":110,"Pantheon":120,"Constantine the Great":325,"Arch of Constantine":313,"Venus of Willendorf":-25000,"Spotted Horses and Human Hands":-24500,"Nanna Ziggurat":-2100,"Warka Vase":-3150,"Stele of Naram-Sin":-2220,"Law Code of Hammurabi":-1750,"Ashurnasirpal II Hunting Lions":-860,"Palette of Narmer":-3000,"Great Pyramids at Giza and Great Sphinx":-2500,"Akhenaten and Nefertiti Worshipping the Aton":-1357,"Bust of Nefertiti":-1330,"Funerary Mask of Tutankhamen":-1328,"Cycladic Head":-2500,"Palace at Knossos":-1500,"Toreador Fresco":-1500,"Lion Gate":-1250};
+let tg=null,tNew=false,tS=[0,0];
+function tlList(){
+ const I=(l,c)=>({l,s:l,c}),ask=()=>"Which is the "+(tNew?"newest":"oldest")+"? "+tg.ws.map((w,k)=>"Option "+(k+1)+", "+w.t).join(". ");
+ const L=[I("New round",()=>{
+  const ws=[];while(ws.length<3){const w=ALL[Math.floor(Math.random()*ALL.length)];if(!ws.includes(w)&&ws.every(x=>Math.abs(YR[x.t]-YR[w.t])>=20))ws.push(w)}
+  tg={ws,done:false};const m=ask();render();show(m);say(m);
+ })];
+ for(let k=0;k<3;k++)L.push({l:tg?(k+1)+": "+tg.ws[k].t:"Option "+(k+1),s:tg?"Option "+(k+1)+", "+tg.ws[k].t:"Option "+(k+1),c:()=>{
+  if(!tg){say("Start a round first");return}
+  if(tg.done){say("Round finished. Start a new round.");return}
+  tg.done=true;
+  const y=tg.ws.map(w=>YR[w.t]),target=tNew?Math.max(...y):Math.min(...y),ans=tg.ws[y.indexOf(target)],ok=YR[tg.ws[k].t]===target;
+  tS[1]++;if(ok)tS[0]++;
+  const order=tg.ws.slice().sort((a,b)=>YR[a.t]-YR[b.t]).map(w=>w.t).join(", then ");
+  const m=(ok?"Correct! ":"Not quite. ")+"The "+(tNew?"newest":"oldest")+" is "+ans.t+", "+ans.date+". Oldest to newest: "+order+". Score "+tS[0]+" of "+tS[1]+".";
+  show(m);say(m);
+ }});
+ L.push(I("Read options",()=>{if(!tg){say("Start a round first");return}const m=ask();show(m);say(m)}),
+  I("Question: "+(tNew?"newest":"oldest"),()=>{tNew=!tNew;tg=null;render();say("Now asking for the "+(tNew?"newest":"oldest"))}),
+  I("Score",()=>{const m="Score "+tS[0]+" of "+tS[1];show(m);say(m)}),backTo("games"));
+ return L;
+}
+const FACTS=["Octopuses have three hearts and blue blood.","A day on Venus is longer than a year on Venus.","Bananas are berries, but strawberries are not.","Sharks are older than trees.","Wombat droppings are shaped like cubes.","Cleopatra lived closer in time to the Moon landing than to the building of the Great Pyramid.","The Great Pyramid of Giza was the tallest human-made structure for about 3,800 years.","The Eiffel Tower can grow about 15 centimeters taller in summer heat.","Historians estimate the Colosseum could hold around 50,000 people.","Honey can last for thousands of years without spoiling."];
+function musicTabList(){return [go("Music maker","music","Music maker. Scroll to hear notes, click to add them."),go("Drum pad","drums","Drum pad. Scroll to hear each drum, click to play it."),go("Metronome","metro","Metronome."),backTo("fun")]}
+function randList(){
+ const I=(l,c)=>({l,s:l,c}),R=n=>1+Math.floor(Math.random()*n);
+ return [I("Roll a die",()=>{const n=R(6);show(String(n));say("You rolled a "+n)}),I("Roll a d20",()=>{const n=R(20);show(String(n));say("You rolled a "+n)}),
+  I("Flip a coin",()=>{const s=Math.random()<.5?"Heads":"Tails";show(s);say(s)}),I("Random number",()=>{const n=R(100);show(String(n));say("Your number is "+n)}),
+  I("Random fun fact",funFact),backTo("fun")];
+}
+const AC=()=>{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();return ctx};
+function ping(f,pan,vol,dur,type){
+ if(muted)return;
+ try{const c=AC(),o=c.createOscillator(),g=c.createGain(),t=c.currentTime;
+  o.type=type||"sine";o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.25*S.vol*vol,t+.01);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g);let n=g;if(c.createStereoPanner){const p=c.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan));g.connect(p);n=p}
+  n.connect(c.destination);o.start(t);o.stop(t+dur+.05)}catch(e){}
+}
+const nameOf=ch=>/[A-Z]/.test(ch)?LN[ch.charCodeAt(0)-65]:ch;
+const GI=(l,c)=>({l,s:l,c});
+// ---- perfect pitch ----
+const PN=[["C",261.63],["C sharp",277.18],["D",293.66],["D sharp",311.13],["E",329.63],["F",349.23],["F sharp",369.99],["G",392],["G sharp",415.3],["A",440],["A sharp",466.16],["B",493.88]];
+let pAll=true,pOct=false,pq=null,pS=[0,0,0],lOct=1;
+const pOpts=()=>pAll?PN:PN.filter(n=>!n[0].includes("sharp"));
+function pNew(){const o=pOpts(),n=o[Math.floor(Math.random()*o.length)],oc=pOct?[.5,1,2][Math.floor(Math.random()*3)]:1;pq={n,oc,done:false};tone(n[1]*oc,1);show("Which note was that?")}
+function pitchMenuList(){return [go("Learn notes","learn","Learn notes. Scroll to hear each one."),go("Quiz","pitch","Pitch quiz. Click new note."),backTo("games")]}
+function learnList(){
+ const L=PN.map(n=>({l:n[0],s:n[0],p:()=>{tone(n[1]*lOct,.8);say(n[0])},c:()=>tone(n[1]*lOct,1.2)}));
+ L.push(GI("Octave: "+(lOct===.5?"low":lOct===1?"middle":"high"),()=>{lOct=lOct===1?2:lOct===2?.5:1;render();tone(440*lOct,.4);say(lOct===.5?"Low octave":lOct===1?"Middle octave":"High octave")}),backTo("pitchmenu"));
+ return L;
+}
+function pitchList(){
+ const L=[GI("New note",pNew),GI("Replay note",()=>{if(!pq){say("Click new note first");return}tone(pq.n[1]*pq.oc,1)})];
+ pOpts().forEach(n=>L.push(GI(n[0],()=>{
+  if(!pq||pq.done){say("Click new note first");return}
+  pq.done=true;pS[1]++;const ok=n===pq.n;if(ok){pS[0]++;pS[2]++}else pS[2]=0;
+  const m=ok?"Correct! "+n[0]+". Streak "+pS[2]+".":"It was "+pq.n[0]+". You chose "+n[0]+".";
+  show(m);say(m);const q=pq;
+  setTimeout(()=>{if(level==="pitch"&&pq===q)tone(q.n[1]*q.oc,.8)},1700);
+  setTimeout(()=>{if(level==="pitch"&&pq===q)pNew()},3900);
+ })));
+ L.push(GI("Range: "+(pAll?"all 12 notes":"white keys only"),()=>{pAll=!pAll;pq=null;render();say(pAll?"All 12 notes":"White keys only")}),
+  GI("Random octave: "+(pOct?"on":"off"),()=>{pOct=!pOct;pq=null;render();say("Random octave "+(pOct?"on":"off"))}),
+  GI("Score",()=>{const m="Score "+pS[0]+" of "+pS[1]+". Streak "+pS[2];show(m);say(m)}),backTo("pitchmenu"));
+ return L;
+}
+// ---- morse ----
+const MC={A:".-",B:"-...",C:"-.-.",D:"-..",E:".",F:"..-.",G:"--.",H:"....",I:"..",J:".---",K:"-.-",L:".-..",M:"--",N:"-.",O:"---",P:".--.",Q:"--.-",R:".-.",S:"...",T:"-",U:"..-",V:"...-",W:".--",X:"-..-",Y:"-.--",Z:"--..",0:"-----",1:".----",2:"..---",3:"...--",4:"....-",5:".....",6:"-....",7:"--...",8:"---..",9:"----."};
+const REV=Object.fromEntries(Object.entries(MC).map(([k,v])=>[v,k])),CHARS=Object.keys(MC).sort((a,b)=>/\d/.test(a)-/\d/.test(b)||a.localeCompare(b));
+let mdot=100,mq=null,mSc=[0,0],kDown=0,kOsc=null,kTxt="",kSeq="",kT=null;
+const pretty=c=>c.replace(/\./g,"•").replace(/-/g,"–");
+function mflat(t0,len){try{const c=AC(),o=c.createOscillator(),g=c.createGain(),t=c.currentTime+t0/1000,v=.2*S.vol;o.frequency.value=600;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.005);g.gain.setValueAtTime(v,t+len/1000-.01);g.gain.linearRampToValueAtTime(0,t+len/1000);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+len/1000+.02)}catch(e){}}
+function playMorse(ch){if(muted||!MC[ch])return;let t=0;[...MC[ch]].forEach(s=>{const l=s==="."?mdot:mdot*3;mflat(t,l);t+=l+mdot})}
+function morseList(){
+ const sp=d=>()=>{mdot=Math.max(30,mdot+d);say(Math.round(1200/mdot)+" words per minute");render()};
+ return [go("Learn","mlearn","Learn Morse. Scroll to hear each character."),go("Quiz","mquiz","Morse quiz. Click new letter."),go("Telegraph key","mkey","Telegraph key. Hold the left button to tap."),
+  GI("Faster",sp(-10)),GI("Slower",sp(10)),backTo("games")];
+}
+function mlearnList(){return [...CHARS.map(ch=>({l:ch,s:ch,p:()=>{show(pretty(MC[ch]));say(nameOf(ch));setTimeout(()=>playMorse(ch),700)},c:()=>{show(pretty(MC[ch]));playMorse(ch)}})),backTo("morse")]}
+function mNew(){const ch=CHARS[Math.floor(Math.random()*26)];mq={ch,done:false};playMorse(ch);show("Which letter was that?")}
+function mquizList(){
+ const L=[GI("New letter",mNew),GI("Replay",()=>{if(!mq){say("Click new letter first");return}playMorse(mq.ch)})];
+ CHARS.slice(0,26).forEach(ch=>L.push({l:ch,s:nameOf(ch),c:()=>{
+  if(!mq||mq.done){say("Click new letter first");return}
+  mq.done=true;mSc[1]++;const ok=ch===mq.ch;if(ok)mSc[0]++;
+  const m=ok?"Correct! "+nameOf(ch)+".":"It was "+nameOf(mq.ch)+". You chose "+nameOf(ch)+".";show(m+" "+pretty(MC[mq.ch]));say(m);const q=mq;
+  setTimeout(()=>{if(level==="mquiz"&&mq===q)playMorse(q.ch)},1600);
+  setTimeout(()=>{if(level==="mquiz"&&mq===q)mNew()},4200);
+ }}));
+ L.push(GI("Score",()=>{const m="Score "+mSc[0]+" of "+mSc[1];show(m);say(m)}),backTo("morse"));
+ return L;
+}
+function mkeyList(){return [GI("Hold here to tap",()=>{}),GI("Read text",()=>say(kTxt.trim()?kTxt.split("").map(nameOf).join(" "):"Nothing sent yet")),GI("Clear text",()=>{kTxt="";kSeq="";render();say("Cleared")}),backTo("morse")]}
+function keyDown(){
+ kDown=Date.now();clearTimeout(kT);
+ try{const c=AC(),o=c.createOscillator(),g=c.createGain();o.frequency.value=600;g.gain.value=muted?0:.2*S.vol;o.connect(g);g.connect(c.destination);o.start();kOsc=o}catch(e){}
+}
+function keyUp(){
+ if(!kDown)return;
+ const d=Date.now()-kDown;kDown=0;try{kOsc&&kOsc.stop()}catch(e){}kOsc=null;
+ kSeq+=d<mdot*2?".":"-";show("Text: "+kTxt+"\nSending: "+pretty(kSeq));
+ kT=setTimeout(()=>{const ch=REV[kSeq];kSeq="";if(ch){kTxt+=ch;say(nameOf(ch))}else say("Not a letter");if(level==="mkey")render()},mdot*6);
+}
+// ---- reaction time ----
+let rS="idle",rT=0,rTO=null,rBest=0;
+try{rBest=+localStorage.getItem("mm_react")||0}catch(e){}
+function reactPress(){
+ if(rS==="idle"){rS="wait";render();say("Wait for the beep. Click as fast as you can.");rTO=setTimeout(()=>{rS="go";rT=performance.now();tick(1200,.25);if(level==="react")render()},3500+Math.random()*4000)}
+ else if(rS==="wait"){clearTimeout(rTO);rS="idle";render();say("Too early. Click to try again.")}
+ else{const ms=Math.round(performance.now()-rT);rS="idle";let m=ms+" milliseconds.";if(!rBest||ms<rBest){rBest=ms;try{localStorage.setItem("mm_react",ms)}catch(e){}m+=" New best!"}render();show(m);say(m)}
+}
+function reactList(){
+ return [GI(rS==="idle"?"Start round":rS==="wait"?"Wait for the beep…":"CLICK NOW!",()=>{}),
+  GI("Best time",()=>{const m=rBest?"Your best is "+rBest+" milliseconds":"No best time yet";show(m);say(m)}),
+  GI("Reset best",()=>sure("rrst","Click again to reset your best time",()=>{rBest=0;try{localStorage.removeItem("mm_react")}catch(e){}say("Reset")})),backTo("games")];
+}
+// ---- safe cracker ----
+let sc=null;
+const scNew=()=>{sc={code:[0,0,0].map(()=>Math.floor(Math.random()*60)),stage:0,tries:0}};scNew();
+function safeCue(n){const t=sc.code[sc.stage],d0=Math.abs(n-t),d=Math.min(d0,60-d0);if(!d){ping(1500,0,1,.12);setTimeout(()=>ping(1500,0,1,.2),140)}else ping(200+(30-d)*35,0,.5+(30-d)/60,.12)}
+function safeList(){
+ const L=[GI("New safe",()=>{scNew();render();say("New safe. Scroll the dial. A higher pitch means you are closer. Click to lock a number.")}),
+  GI("Hint",()=>{const n=pos.safe-2;if(n<0||n>59){say("Scroll onto the dial first");return}const up=(sc.code[sc.stage]-n+60)%60;say(up===0?"You are on it. Click to lock.":up<=30?"Go higher by "+up:"Go lower by "+(60-up))})];
+ for(let n=0;n<60;n++)L.push({l:String(n),s:String(n),p:()=>{safeCue(n);say(String(n))},c:()=>{
+  sc.tries++;let m;
+  if(n===sc.code[sc.stage]){sc.stage++;if(sc.stage===3){m="Safe cracked in "+sc.tries+" tries!";scNew()}else{m="Click! Lock "+sc.stage+" of 3 open. Find the next number.";ping(1000,0,1,.3)}}
+  else{m="Wrong number.";ping(90,0,1,.3,"sawtooth")}
+  render();show(m);say(m);
+ }});
+ L.push(backTo("games"));return L;
+}
+// ---- online: weather, dictionary, wikipedia, AI ----
+let en={buf:"",p:"ask",back:"ask"},tTarget="note",hist=[],lastAns="",askCtx=null,askBack="main";
+const curBuf=()=>(level==="entry"||(level==="chars"&&tTarget!=="note"))?en.buf:tbuf;
+const WH={"Sleep and Death Carrying Sarpedon from the Battlefield":"Euphronios krater","New York Kouros":"Metropolitan Museum kouros New York Kouros","Doryphoros (Spear Bearer)":"Doryphoros","Gaul Killing Himself and His Wife":"Ludovisi Gaul","She Wolf":"Capitoline Wolf","Augustus of Primaporta":"Augustus of Prima Porta","Theseus after Killing the Minotaur":"Theseus Liberator fresco","Trajan's Basilica":"Basilica Ulpia","Constantine the Great":"Colossus of Constantine","Spotted Horses and Human Hands":"Pech Merle","Nanna Ziggurat":"Ziggurat of Ur","Stele of Naram-Sin":"Victory Stele of Naram-Sin","Law Code of Hammurabi":"Code of Hammurabi","Ashurnasirpal II Hunting Lions":"Lion hunt of Ashurnasirpal II relief","Palette of Narmer":"Narmer Palette","Great Pyramids at Giza and Great Sphinx":"Giza pyramid complex","Akhenaten and Nefertiti Worshipping the Aton":"Akhenaten","Bust of Nefertiti":"Nefertiti Bust","Funerary Mask of Tutankhamen":"Mask of Tutankhamun","Cycladic Head":"Cycladic art","Palace at Knossos":"Knossos","Toreador Fresco":"Bull-Leaping Fresco","Lion Gate":"Lion Gate Mycenae","Pantheon":"Pantheon, Rome","Laocoön Group":"Laocoön and His Sons","Sarcophagus from Cerveteri":"Sarcophagus of the Spouses","Nike of Samothrace":"Winged Victory of Samothrace","Pont du Gard":"Pont du Gard","Parthenon":"Parthenon"};
+const fetchJ=async(u,o)=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);try{const r=await fetch(u,{...o,signal:c.signal});if(!r.ok)throw new Error(r.status);return r}finally{clearTimeout(t)}};
+async function wiki(q,hint){
+ say("Looking that up");
+ try{
+  const s=await (await fetchJ("https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&origin=*&srsearch="+encodeURIComponent(hint||q))).json();
+  const t=s.query.search[0].title,j=await (await fetchJ("https://en.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t))).json(),ex=j.extract||"";
+  if(!ex){say("I couldn't find more about that");return}
+  show(t+"\n\n"+ex);say(ex.split(/(?<=[.!?])\s+/).slice(0,4).join(" "));
+ }catch(e){say("I couldn't reach Wikipedia. Check your internet connection.")}
+}
+const STY=[["Normal",""],["Casual","Talk in a relaxed, casual way."],["Friendly teacher","Talk like a friendly, encouraging teacher."],["Professor","Talk like a knowledgeable art history professor."],["Pirate","Talk like a pirate."],["Explain like I'm five","Explain things very simply, as if to a five year old."],["Funny","Be funny and use light jokes."]];
+function sysPrompt(){
+ let s="You are a helpful assistant inside an audio-only study app. Answer in a few short spoken sentences. Use plain text only: no markdown, no lists, no symbols.";
+ const st=STY[S.aiStyle|0];if(st&&st[1])s+=" "+st[1];
+ if(S.aiMax)s+=" Keep your whole answer under "+S.aiMax+" characters.";
+ if(S.aiCustom)s+=" Extra instructions from the user: "+S.aiCustom;
+ if(askCtx)s+=" The user is studying this artwork: "+askCtx.t+" ("+askCtx.culture+", "+askCtx.date+"). "+askCtx.desc;
+ return s;
+}
+const aiSummary=()=>"Style: "+STY[S.aiStyle|0][0]+". Length limit: "+(S.aiMax?S.aiMax+" characters":"none")+". Custom instructions: "+(S.aiCustom||"none")+".";
+async function aiCall(sys,msgs){
+ let ans="";
+ try{const j=await (await fetchJ("https://text.pollinations.ai/openai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"openai-fast",messages:[{role:"system",content:sys},...msgs]})})).json();ans=j.choices[0].message.content||""}catch(e){}
+ if(!ans)try{ans=await (await fetchJ("https://text.pollinations.ai/"+encodeURIComponent(sys+"\n\n"+msgs.map(m=>m.content).join("\n")).slice(0,6000))).text()}catch(e){}
+ return (ans||"").trim();
+}
+function capLen(a){
+ if(!S.aiMax||a.length<=S.aiMax)return a;
+ const c=a.slice(0,S.aiMax),e=Math.max(c.lastIndexOf(". "),c.lastIndexOf("! "),c.lastIndexOf("? "),/[.!?]$/.test(c)?c.length-1:-1);
+ return e>S.aiMax*.4?c.slice(0,e+1):c.replace(/\s+\S*$/,"")+"...";
+}
+async function askAI(q){
+ q=(q||"").trim();if(!q){say("Ask a question first");return}
+ hist.push({role:"user",content:q});show("You: "+q+"\n\nThinking...");say("Thinking");
+ const pulse=setInterval(()=>tick(400,.03),2000);
+ let ans=await aiCall(sysPrompt(),hist.slice(-8));clearInterval(pulse);
+ if(!ans){hist.pop();say("I couldn't reach the AI. Check your internet connection or try again later.");return}
+ ans=capLen(ans);hist.push({role:"assistant",content:ans});lastAns=ans;
+ show("You: "+q+"\n\n"+ans);say(ans);
+}
+function submit(){
+ if(en.p==="ask"){en.back="ask";level="ask";render();askAI(en.buf)}
+ else{S.aiCustom=en.buf.trim();saveS();level="aiset";render();say("Saved instructions")}
+}
+function entryList(){
+ tTarget="entry";
+ const up=caps||/(^|[.!?]\s)$/.test(en.buf),ask=en.p==="ask";
+ const L=[..."abcdefghijklmnopqrstuvwxyz"].map((ch,k)=>{const c2=up?ch.toUpperCase():ch;return {l:c2,s:LN[k],c:()=>typed(c2,LN[k])}});
+ L.push(GI("Space",()=>typed(" ","space")),go("Characters","chars","Characters."),GI("Keyboard",kbOn),
+  GI(ask?"Speak your question":"Speak instructions",()=>voiceText(t=>{en.buf=t;submit()})),
+  GI("Delete",()=>{en.buf=en.buf.slice(0,-1);render();say("Deleted")}),
+  GI("Read",()=>say(en.buf.trim()||"Nothing typed yet")),
+  GI("Clear",()=>{en.buf="";render();say("Cleared")}),
+  GI(ask?"Send question":"Save instructions",submit),backTo(en.back));
+ return L;
+}
+const openEntry=(p,back,msg,init)=>{en={buf:init||"",p,back};level="entry";pos.entry=0;render();say(msg)};
+function askList(){
+ const L=[GI("Speak a question",()=>voiceText(t=>askAI(t))),GI("Type a question",()=>openEntry("ask","ask","Type your question. Right click for space. When you are done, scroll to Send question and click."))];
+ if(askCtx)L.push(GI("Why is it important?",()=>askAI("Why is this artwork important in art history?")),GI("What should I remember for a test?",()=>askAI("What are the key facts I should remember about this artwork for an art history test?")));
+ L.push(GI("Read last answer",()=>say(lastAns||"No answer yet")),
+  GI("Save answer as note",()=>{if(!lastAns){say("No answer yet");return}notes.unshift({t:Date.now(),text:(hist.length>1?"Q: "+hist[hist.length-2].content+"\nA: ":"")+lastAns,typed:true});saveNotes();say("Saved to notes")}),
+  GI("Quick answer mode: "+(qaOn?"on":"off"),qaToggle),
+  GI("Clear conversation",()=>{hist=[];lastAns="";render();say("Conversation cleared")}),
+  go("AI settings","aiset","AI settings. Style, length limit, and custom instructions."),backTo(askBack));
+ return L;
+}
+function aiSetList(){
+ const adj=(l,d)=>GI(l,()=>{S.aiMax=Math.max(10,(S.aiMax||0)+d);saveS();render();say("Limit "+S.aiMax+" characters")});
+ return [GI("Style: "+STY[S.aiStyle|0][0],()=>{S.aiStyle=((S.aiStyle|0)+1)%STY.length;saveS();render();say(STY[S.aiStyle][0])}),
+  adj("Longer by 100",100),adj("Shorter by 100",-100),adj("Longer by 10",10),adj("Shorter by 10",-10),
+  GI("No length limit",()=>{S.aiMax=0;saveS();render();say("No length limit")}),
+  GI("Type custom instructions",()=>openEntry("instr","aiset","Type your instructions. Choose Save instructions when done.",S.aiCustom||"")),
+  GI("Speak custom instructions",()=>voiceText(t=>{S.aiCustom=t.trim();saveS();render();say("Saved. "+S.aiCustom)})),
+  GI("Read my settings",()=>say(aiSummary())),
+  GI("Clear custom instructions",()=>{S.aiCustom="";saveS();render();say("Cleared")}),backTo("ask")];
+}
+let curN=0;
+async function cleanNote(i){
+ const x=notes[i];if(!x)return;say("Cleaning up the note");
+ const out=await aiCall("You fix text that came from voice dictation or typing. Correct spelling, grammar, capitalization and punctuation, and split run-on text into sentences. Keep the original meaning and wording. Do not add or remove information. Reply with only the corrected text, with no quotes and no commentary.",[{role:"user",content:x.text}]);
+ if(!out){say("I couldn't reach the AI to clean up the note");return}
+ if(out.length>x.text.length*2+60){say("The AI's answer looked wrong, so I kept your original");return}
+ if(!x.orig)x.orig=x.text;x.text=out.replace(/^["“]+|["”]+$/g,"").trim();saveNotes();show(x.text);say("Cleaned up. "+x.text);
+}
+function noteList(){
+ const x=notes[curN];if(!x)return [backTo("notes")];
+ return [GI("Read",()=>say(x.text)),GI("Clean up with AI",()=>cleanNote(curN)),GI("Make study notes (AI)",()=>studyNotes(x)),
+  ...(x.orig?[GI("Restore original",()=>{x.text=x.orig;delete x.orig;saveNotes();show(x.text);say("Restored the original")})]:[]),
+  GI("Delete this note",()=>sure("dn","Click again to delete this note",()=>{notes.splice(curN,1);saveNotes();level="notes";render();say("Deleted")})),backTo("notes")];
+}
+const TOPICS=["space","the ocean","ancient history","art","animals","food","language","the human body","music","geography","inventions","plants","weather","architecture","mathematics"];
+async function funFact(){
+ const t=TOPICS[Math.floor(Math.random()*TOPICS.length)];say("Finding a fun fact about "+t);
+ const a=await aiCall("You share one surprising but true fact. Reply with one or two plain sentences, no markdown, and no intro like 'Did you know'. Only share facts you are very sure are true.",[{role:"user",content:"Give me a fun fact about "+t+". Random seed "+Math.floor(Math.random()*10000)}]);
+ const f=a&&a.length<400?a:FACTS[Math.floor(Math.random()*FACTS.length)];show(f);say(f);
+}
+// ---- autocomplete, right click, keyboard ----
+const COMMON="about above after again against all almost along already also always among another answer any around ask away back because been before began being below best better between big both bring build but call came can care change children close come could country day did different does done down during each early earth easy end enough even ever every example eye face fact family far father feel few find first follow food form found friend from get give going good great group grow hand happen hard have head hear help here high home house how idea important into just keep kind know land large last later learn leave less life light like line little live long look made make many may mean might more most mother move much must name near need never new next night nothing now number off often old once only open order other over own page paper part people place plan plant play point put question quite read real really right river room run same school second see seem sentence set should show side small some something sometimes song soon sound spell start state still stop story study such sure take talk teacher tell than that their them then there these they thing think this those thought three through time together too took tree try turn under understand until use very want water way well went were what when where which while white who whole why will with without word work world would write year young".replace(/\s+/g," ");
+let WORDS=null,sugRet="typing",sugState=null,rcN=0,rcT=null;
+const addW=(t,sc,m)=>(t.toLowerCase().match(/[a-z][a-z']{2,}/g)||[]).forEach(w=>m.set(w,(m.get(w)||0)+sc));
+function suggest(p){
+ if(!WORDS){const m=new Map();addW(COMMON,2,m);ALL.forEach(w=>addW([w.t,w.desc,w.culture,w.medium||"",w.loc||""].join(" "),3,m));VOCAB.forEach(v=>addW(v.t+" "+v.d,3,m));WORDS=m}
+ const m=new Map(WORDS);notes.forEach(x=>addW(x.text,4,m));addW(tbuf,4,m);
+ const q=p.toLowerCase();
+ return [...m.entries()].filter(([w])=>w.startsWith(q)&&w!==q).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8).map(e=>e[0]);
+}
+const lastWord=b=>{const m=b.match(/[A-Za-z']+$/);return m?m[0]:""};
+const bufGet=()=>tTarget==="note"?tbuf:en.buf;
+const bufSet=v=>{if(tTarget==="note"){tbuf=v;saveDraft()}else en.buf=v};
+const lastSentence=b=>b.trim().split(/(?<=[.!?])\s+/).pop();
+function sugList(){
+ const w=lastWord(bufGet());
+ return [...suggest(w).map(x=>({l:x,s:x,c:()=>{const b=bufGet(),cap=/^[A-Z]/.test(w)?x[0].toUpperCase()+x.slice(1):x;bufSet(b.slice(0,b.length-w.length)+cap+" ");level=sugRet;render();say(cap)}})),{l:"Back",s:"Back",c:()=>{level=sugRet;render();say("Back")}}];
+}
+function rcWords(n){
+ const b=bufGet(),w=level==="chars"?"":lastWord(b);
+ if(n===3&&w){
+  const sg=suggest(w);
+  if(!sg.length){say("No suggestions for "+w);return}
+  if(sugState&&sugState.w===w&&Date.now()-sugState.t<8000){sugRet=level;level="suggest";pos.suggest=0;render();say("Pick a word. "+sg[0]);return}
+  sugState={w,t:Date.now()};show("Suggestions for "+w+":\n"+sg.join("\n"));say("Did you mean: "+sg.slice(0,5).join(", ")+". Triple right click again to choose.");return;
+ }
+ say(b.trim()?lastSentence(b):"Nothing typed yet");
+}
+const findItem=(L,names)=>{for(const nm of [].concat(names||[])){const it=L.find(x=>x.l===nm||x.l.startsWith(nm));if(it)return it}return null};
+function goBack(){const it=findItem(list(),["Back","Close"]);if(it)it.c();else say("Main menu")}
+const RCT={custom:["Start timer","Delete","Read"],convnum:["Convert","Delete","Read"],guess:["Guess","Delete","Read"],music:["Play melody","Undo last note"],flash:["Reveal answer","New artwork card"],pitch:["Replay note","New note"],mquiz:["Replay","New letter"],time:["Read options","New round"],safe:["Hint","New safe"],stopwatch:["Check time",["Pause stopwatch","Resume stopwatch","Start stopwatch"]],metro:[["Stop","Start"]],drums:["Play beat","Stop beat"],ask:["Speak a question","Read last answer"]};
+function rcAct(n){
+ if(!started||dead)return;
+ if(recording){stopRec(true);return}
+ if(level==="eq"||level==="eqmore"){
+  if(n===1){if(/[x=]/.test(expr))solve();else equals()}
+  else if(n===2){expr=expr.trimEnd();expr=expr.endsWith("√(")?expr.slice(0,-2):expr.slice(0,-1);expr=expr.trimEnd();disp();say("Deleted")}
+  else say(expr.trim()?spoken(expr):"Nothing typed yet");
+  return;
+ }
+ if(level==="typing"||level==="entry"||level==="chars"){
+  if(n===1)typed(" ","space");
+  else if(n===2){bufSet(bufGet().slice(0,-1));render();say("Deleted")}
+  else rcWords(n);
+  return;
+ }
+ const T=RCT[level];
+ if(T){const it=n<=3&&T[n-1]?findItem(list(),T[n-1]):null;if(it)it.c();else goBack();return}
+ if(n===1)goBack();else{stopRec();level="main";render();say("Main menu")}
+}
+const ki=document.createElement("input");ki.id="ki";ki.type="text";ki.setAttribute("autocomplete","off");ki.setAttribute("autocorrect","off");
+ki.style.cssText="position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;border:0;padding:0;font-size:16px";document.body.appendChild(ki);
+ki.addEventListener("click",e=>e.stopPropagation());
+ki.oninput=()=>{bufSet(ki.value);render()};
+ki.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();ki.blur();if(level==="entry")submit();else say("Keyboard off")}};
+function kbOn(){ki.value=bufGet();ki.focus();say("Keyboard on. Type, then press enter when done.")}
+document.addEventListener("keydown",e=>{
+ if(dead||!started||e.target===ki||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(!(level==="typing"||level==="entry"||level==="chars"))return;
+ if(e.key==="Backspace"){e.preventDefault();bufSet(bufGet().slice(0,-1));render();say("Deleted")}
+ else if(e.key==="Enter"){e.preventDefault();if(level==="entry")submit();else{bufSet(bufGet()+"\n");render()}}
+ else if(e.key.length===1){e.preventDefault();typed(e.key,e.key===" "?"space":nameOf(e.key.toUpperCase()))}
+});
+document.addEventListener("contextmenu",e=>{e.preventDefault();if(!started||dead)return;rcN++;clearTimeout(rcT);rcT=setTimeout(()=>{const n=rcN;rcN=0;rcAct(n)},320)});
+// ---- microphone manager (one shared recognizer = fewer permission prompts) ----
+const SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
+const MIC={r:null,run:false,mode:null,cb:null,segs:{},t:null};
+const keepMic=()=>S.micKeep!==false;
+let qaOn=false,qaHist=[],qaBusy=false,qaQueue="",lastQA="",taker=false,lastSpoken="",spk=false,spkEnd=0,wl=null,downT=0;
+const micModeEnd=()=>{if(!MIC.mode&&!keepMic())micStop()};
+function micGot(t){
+ t=(t||"").trim();if(!t)return;
+ if(MIC.mode==="once"){clearTimeout(MIC.t);const cb=MIC.cb;MIC.mode=null;MIC.cb=null;micModeEnd();if(cb)cb(t)}
+ else if(MIC.mode==="note")noteAppend(t);
+ else if(MIC.mode==="qa"){if(!spk&&Date.now()-spkEnd>=900)qaGot(t)}
+}
+function micLive(t){live=t;if(MIC.mode==="note")showRec();else if(MIC.mode==="once"||MIC.mode==="qa")show("Heard: "+t)}
+const blockedHelp=()=>/^(file|content)$/.test((location.protocol||"").replace(":",""))?"Phones often block the microphone for saved files. Open the app from a web address instead, or run the mic test from the controls menu.":"Tap the lock icon in the browser address bar, open permissions, and allow the microphone.";
+function mkRec(){
+ const r=new SRC();r.lang="en-US";r.continuous=true;r.interimResults=true;
+ r.onstart=()=>{MIC.started=true};
+ r.onresult=ev=>{for(let k=ev.resultIndex;k<ev.results.length;k++){const R=ev.results[k],t=R[0].transcript;
+  if(R.isFinal){const p=MIC.segs[k];delete MIC.segs[k];micGot(p&&p.length>t.length+3&&p.startsWith(t.slice(0,10))?p:t)}
+  else{MIC.segs[k]=t;micLive(t)}}};
+ r.onerror=ev=>{
+  if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){MIC.run=false;recording=false;qaOn=false;MIC.mode=null;say("The microphone is blocked. "+blockedHelp())}
+  else if(ev.error==="network")say("Voice typing needs an internet connection");
+ };
+ r.onend=()=>{if(MIC.r!==r)return;Object.keys(MIC.segs).forEach(k=>{const p=MIC.segs[k];delete MIC.segs[k];micGot(p)});if(MIC.run){try{r.start()}catch(e){}}};
+ return r;
+}
+function micStart(){
+ if(!SRC){say("Voice typing is not available on this device");return false}
+ if(MIC.run)return true;
+ try{
+  if(!MIC.r||!keepMic())MIC.r=mkRec();
+  MIC.started=false;MIC.run=true;MIC.r.start();return true;
+ }catch(e){if(e&&e.name==="InvalidStateError"){MIC.run=true;return true}MIC.run=false;say("Voice typing is not available on this device");return false}
+}
+function micStop(){MIC.run=false;MIC.segs={};try{MIC.r&&MIC.r.stop()}catch(e){}}
+function micToggle(){
+ if(MIC.run){stopRec();qaOn=false;MIC.mode=null;MIC.cb=null;micStop();render();say("Microphone off")}
+ else if(micStart()){render();say("Microphone on")}
+}
+function oneShot(cb){
+ try{
+  const r=new SRC();r.lang="en-US";r.interimResults=false;
+  r.onresult=ev=>cb(ev.results[0][0].transcript);
+  r.onerror=ev=>say(ev.error==="not-allowed"||ev.error==="service-not-allowed"?"The microphone is blocked. "+blockedHelp():ev.error==="no-speech"?"I didn't hear anything":"Voice typing failed");
+  r.start();
+ }catch(e){say("Voice typing is not available on this device")}
+}
+function voiceText(cb){
+ if(!SRC){say("Voice typing is not available on this device");return}
+ if(recording||qaOn){say("Stop recording or quick answers first");return}
+ try{speechSynthesis.cancel()}catch(e){}
+ tick(900);
+ if(!keepMic()){oneShot(cb);return}
+ MIC.mode="once";MIC.cb=cb;
+ if(!micStart()){MIC.mode=null;return}
+ clearTimeout(MIC.t);clearTimeout(MIC.t2);
+ MIC.t2=setTimeout(()=>{if(MIC.mode==="once"&&!MIC.started){MIC.mode=null;MIC.cb=null;micStop();S.micKeep=false;saveS();say("The shared microphone didn't start, so I switched to simple mode. Please try again. You can run the mic test from the controls menu.")}},10000);
+ MIC.t=setTimeout(()=>{if(MIC.mode==="once"){MIC.mode=null;MIC.cb=null;micModeEnd();say("I didn't hear anything")}},12000);
+}
+async function micTest(){
+ const proto=(location.protocol||"").replace(":","");
+ let perm="unknown",gum="not tried";
+ try{perm=(await navigator.permissions.query({name:"microphone"})).state}catch(e){}
+ say("Testing the microphone. If a permission box appears, choose allow.",true);
+ try{const st=await navigator.mediaDevices.getUserMedia({audio:true});st.getTracks().forEach(t=>t.stop());gum="allowed"}
+ catch(e){gum=e&&e.name==="NotAllowedError"?"blocked":e&&e.name==="NotFoundError"?"no microphone found":e&&e.name==="TypeError"?"not available on this kind of page":((e&&e.name)||"failed")}
+ const m="Page type: "+proto+". Speech recognition: "+(SRC?"available":"not available")+". Microphone permission: "+perm+". Microphone test: "+gum+"."+(gum==="blocked"?" "+blockedHelp():gum==="allowed"?" The microphone works. If voice typing still fails, turn off Keep mic on in Settings.":"");
+ show(m);say(m,true);
+}
+function listen(){voiceText(t=>{const m=parseMath(t);show("Heard: "+t);if(m){expr=m;disp();say("Typed "+spoken(m))}else say("I heard "+t+", but could not turn it into math")})}
+async function wakeOn(){try{wl=await navigator.wakeLock.request("screen")}catch(e){}}
+function wakeOff(){try{wl&&wl.release()}catch(e){}wl=null}
+const trimOverlap=(prev,t)=>{const a=prev.trim().split(/\s+/),b=t.split(/\s+/);for(let n=Math.min(a.length,b.length,12);n>=2;n--){if(a.slice(-n).join(" ").toLowerCase()===b.slice(0,n).join(" ").toLowerCase())return b.slice(n).join(" ")}return t};
+function noteAppend(t){
+ if(!curNote){curNote={t:Date.now(),text:"",session:taker};notes.unshift(curNote)}
+ t=trimOverlap(curNote.text,t);if(!t||curNote.text.endsWith(t)){live="";return}
+ curNote.text+=(curNote.text?" ":"")+t;
+ saveNotes();live="";showRec();
+}
+function stopRec(sp){
+ if(!recording)return;
+ Object.keys(MIC.segs).forEach(k=>{const p=MIC.segs[k];delete MIC.segs[k];noteAppend(p)});
+ recording=false;MIC.mode=null;micModeEnd();wakeOff();
+ const done=curNote,tk=taker;curNote=null;live="";taker=false;tick(500);
+ if(sp){render();say("Saved. "+notes.length+(notes.length===1?" note.":" notes."))}
+ if(tk&&done&&done.text.trim())setTimeout(()=>studyNotes(done),sp?1800:0);
+}
+function toggleRec(tk){
+ if(recording){stopRec(true);return}
+ if(qaOn){say("Turn off quick answers first");return}
+ try{speechSynthesis.cancel()}catch(e){}
+ recording=true;taker=tk===true;curNote=null;live="";MIC.mode="note";
+ if(!micStart()){recording=false;MIC.mode=null;return}
+ wakeOn();tick(900);render();showRec();
+}
+async function studyNotes(x){
+ if(!x||!x.text.trim()){say("Nothing to make notes from");return}
+ say("Making study notes. This may take a minute.");
+ const chunks=[];let t=x.text;
+ while(t.length>3500){let i=t.lastIndexOf(". ",3500);if(i<1500)i=t.lastIndexOf(" ",3500);chunks.push(t.slice(0,i+1));t=t.slice(i+1)}
+ chunks.push(t);const out=[];
+ for(const c of chunks){const n=await aiCall("You turn a raw transcript of a spoken session into clear study notes. Write short plain lines, each starting with a dash. Keep every important fact, name, date and term. Only use information in the transcript and do not add anything. No markdown other than the dashes.",[{role:"user",content:c}]);if(n)out.push(n)}
+ if(!out.length){say("I couldn't reach the AI. Your full transcript is saved as a note.");return}
+ notes.unshift({t:Date.now(),text:"Study notes:\n"+out.join("\n"),typed:true});saveNotes();
+ show(notes[0].text);say("Study notes saved as a new note. Open it to read or listen.");
+}
+function takerList(){
+ return [GI(recording&&taker?"Stop session and make notes":"Start session",()=>{if(recording&&taker)stopRec(true);else{if(recording){say("Stop the current recording first");return}toggleRec(true)}}),
+  GI("Make notes from newest note",()=>{if(!notes.length){say("No notes yet");return}studyNotes(notes[0])}),backTo("notes")];
+}
+// ---- quick answer mode ----
+const QWORDS=/\b(what|why|how|when|where|who|whom|whose|which|does|did|can|could|would|should|explain|define|meaning|difference|tell me)\b/i;
+async function qaGot(t){
+ if(t.split(/\s+/).length<4||!QWORDS.test(t))return;
+ qaQueue+=(qaQueue?" ":"")+t;if(qaBusy)return;qaBusy=true;
+ while(qaQueue){
+  const q=qaQueue;qaQueue="";qaHist.push({role:"user",content:q});show("Heard: "+q+"\n\nThinking...");
+  let a=await aiCall("You are listening in on a spoken conversation or lecture. The latest text is a transcript chunk. If it contains a question, term or claim that deserves a quick answer and is not completely obvious, answer briefly in one or two plain sentences. If nothing needs an answer, reply with exactly NONE. Plain text only."+(S.aiCustom?" "+S.aiCustom:""),qaHist.slice(-6));
+  a=capLen(a);
+  if(a&&!/^none\b/i.test(a)){qaHist.push({role:"assistant",content:a});lastQA=a;show("Q: "+q+"\n\nA: "+a);if(qaOn)sayPri(a)}
+  else{qaHist.pop();show("Listening...")}
+ }
+ qaBusy=false;
+}
+function qaToggle(){
+ if(qaOn){qaOn=false;MIC.mode=null;micModeEnd();render();say("Quick answers off");return}
+ if(recording){say("Stop recording first");return}
+ if(!SRC){say("Voice typing is not available on this device");return}
+ qaOn=true;MIC.mode="qa";qaHist=[];tick(900);
+ if(!micStart()){qaOn=false;MIC.mode=null;return}
+ render();say("Quick answers on. I will answer questions I hear. It stays on until you turn it off.");
+}
+// ---- compass ----
+let hdg=null,compOn=false,annT=null,annDir="",northT=null;
+const DIRS=["north","northeast","east","southeast","south","southwest","west","northwest"];
+const dirName=h=>DIRS[Math.round(h/45)%8];
+function onOrient(e){let h=null;if(e.webkitCompassHeading!=null)h=e.webkitCompassHeading;else if(e.alpha!=null&&(e.absolute||e.type==="deviceorientationabsolute"))h=(360-e.alpha)%360;if(h!=null)hdg=(h+360)%360}
+async function compassStart(){
+ if(compOn)return true;
+ try{
+  if(typeof DeviceOrientationEvent!=="undefined"&&DeviceOrientationEvent.requestPermission){if(await DeviceOrientationEvent.requestPermission()!=="granted"){say("Compass permission was denied");return false}}
+  window.addEventListener("deviceorientationabsolute",onOrient,true);window.addEventListener("deviceorientation",onOrient,true);compOn=true;
+  await new Promise(r=>setTimeout(r,600));return true;
+ }catch(e){say("The compass isn't available on this device");return false}
+}
+function stopCompass(){clearInterval(annT);clearInterval(northT);annT=northT=null;annDir=""}
+function compassList(){
+ return [GI("Read heading",async()=>{if(!await compassStart())return;if(hdg==null){say("I can't read a compass heading. Hold the phone flat and try again.");return}const m="Facing "+dirName(hdg)+", "+Math.round(hdg)+" degrees";show(m);say(m)}),
+  GI("Announce direction: "+(annT?"on":"off"),async()=>{if(annT){clearInterval(annT);annT=null;render();say("Announcing off");return}if(!await compassStart())return;annT=setInterval(()=>{if(hdg==null)return;const d=dirName(hdg);if(d!==annDir){annDir=d;say(d)}},1500);render();say("Announcing on")}),
+  GI("Find north: "+(northT?"on":"off"),async()=>{if(northT){clearInterval(northT);northT=null;render();say("Find north off");return}if(!await compassStart())return;northT=setInterval(()=>{if(hdg==null)return;const off=((540-hdg)%360)-180;if(Math.abs(off)<8){ping(1300,0,1,.1);setTimeout(()=>ping(1300,0,1,.1),140)}else ping(300+(180-Math.abs(off))*3,Math.max(-1,Math.min(1,off/90)),.7,.12)},450);render();say("Find north on. Turn until you hear a double beep. A sound in your left ear means north is to your left.")}),
+  {l:"Back",s:"Back",c:()=>{stopCompass();level="fun";render();say("Back. "+list()[pos.fun].s)}}];
+}
+// ---- where am I, help, panic ----
+function whereAmI(){const L=list(),i=Math.min(pos[level],L.length-1);say("You are in "+$("crumb").textContent+", on "+L[i].l+", item "+(i+1)+" of "+L.length+". I last said: "+lastSpoken,true)}
+function helpMe(){say("Scroll moves. Left click chooses. Hold left click to hear where you are and repeat the last thing I said. Right click goes back. Double right click goes to the main menu. Middle click opens controls. Double middle click mutes everything and turns the screen black. While typing, single right click is space, double is backspace, and triple suggests words.",true)}
+function panicToggle(){
+ if(level==="ctrl")level=from;
+ panic=!panic;
+ if(panic){mutedAll=true;muted=true;try{speechSynthesis.cancel()}catch(e){}}else{mutedAll=false;muted=false}
+ slots.forEach(s=>s&&(s.el.muted=mutedAll));applyVis();
+ try{navigator.vibrate&&navigator.vibrate(panic?[40,40,40]:20)}catch(e){}
+ render();if(!panic)say("Back to normal");
+}
+document.addEventListener("mousedown",e=>{if(e.button===0)downT=Date.now()});
+function exportBackup(){
+ try{
+  const d={v:1,notes,settings:S,melody,mbpm,draft:tbuf,react:rBest};
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:"application/json"}));a.download="mouse-menu-backup.json";
+  document.body.appendChild(a);a.click();setTimeout(()=>{try{URL.revokeObjectURL(a.href);a.remove()}catch(e){}},2000);
+  say("Backup saved to your downloads. It has your notes, settings, and melody, but not imported audio.");
+ }catch(e){say("I couldn't make the backup")}
+}
+const bi=document.createElement("input");bi.type="file";bi.accept=".json,application/json";bi.style.display="none";document.body.appendChild(bi);
+bi.addEventListener("click",e=>e.stopPropagation());
+bi.onchange=()=>{
+ const f=bi.files[0];bi.value="";if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{try{
+  const d=JSON.parse(r.result);let n=0;
+  (d.notes||[]).forEach(x=>{if(x&&x.text&&!notes.some(y=>y.t===x.t&&y.text===x.text)){notes.push(x);n++}});
+  notes.sort((a,b)=>b.t-a.t);saveNotes();
+  if(d.settings)Object.assign(S,d.settings);saveS();applyVis();
+  if(d.melody&&d.melody.length&&!melody.length){melody=d.melody;mbpm=d.mbpm||mbpm;saveMel()}
+  if(d.draft&&!tbuf){tbuf=d.draft;saveDraft()}
+  if(d.react&&(!rBest||d.react<rBest)){rBest=d.react;try{localStorage.setItem("mm_react",rBest)}catch(e){}}
+  render();say("Backup loaded. "+n+" new notes added.");
+ }catch(e){say("That file isn't a valid backup")}};
+ r.readAsText(f);
+};
+function gamesList(){return [go("Guess the number","guess","Guess the number. Type a guess, then click Guess."),{l:"Magic eight ball",s:"Magic eight ball",c:()=>{const B=["Yes, definitely.","It is certain.","Most likely.","Ask again later.","I can't tell right now.","Don't count on it.","My answer is no.","Very doubtful."],s=B[Math.floor(Math.random()*B.length)];show(s);say(s)}},go("Morse code","morse","Morse code."),go("Perfect pitch","pitchmenu","Perfect pitch."),go("Reaction time","react","Reaction time."),go("Safe cracker","safe","Safe cracker. Scroll the dial."),go("Timeline game","time","Timeline game. Start a new round."),backTo("fun")]}
+function forceClose(){
+ dead=true;started=false;stopRec();micStop();stopCompass();qaOn=false;
+ try{speechSynthesis.cancel()}catch(e){}
+ slots.forEach(s=>{try{s&&s.el.pause()}catch(e){}});stopBeat();clearInterval(metroT);timers.length=0;
+ try{ctx&&ctx.close()}catch(e){}
+ try{document.body.innerHTML="";document.body.style.cursor="default";document.title=" "}catch(e){}
+ try{window.close()}catch(e){}
+ setTimeout(()=>{try{location.replace("about:blank")}catch(e){}},150);
+}
+function ctrlList(){
+ const I=(l,c)=>({l,s:l,c}),sync=()=>slots.forEach(s=>s&&(s.el.muted=mutedAll)),buzz=()=>{try{navigator.vibrate&&navigator.vibrate(muted?[30,40,30]:20)}catch(e){}};
+ return [
+  I(muted?"Unmute":"Mute",()=>{if(muted){muted=false;mutedAll=false}else muted=true;sync();if(muted){try{speechSynthesis.cancel()}catch(e){}}buzz();render();if(!muted)say("Unmuted")}),
+  I(mutedAll?"Unmute everything":"Mute everything",()=>{mutedAll=!mutedAll;muted=mutedAll;sync();if(muted){try{speechSynthesis.cancel()}catch(e){}}buzz();render();if(!muted)say("Everything unmuted")}),
+  go("Audio","audio","Audio. Five slots."),
+  I("Time",()=>{const t=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});show(t);say("It is "+t)}),
+  I("Date",()=>{const t=new Date().toLocaleDateString([],{weekday:"long",month:"long",day:"numeric",year:"numeric"});show(t);say("Today is "+t)}),
+  I("Main menu",()=>{stopRec();level="main";render();say("Main menu. "+list()[pos.main].s)}),
+  I("Where am I",whereAmI),I("Help",helpMe),I("Mic: "+(MIC.run?"on":"off"),micToggle),I("Mic test",micTest),I("Close",toggleCtrl),
+  I("Force close",()=>sure("fc","Click again to force close",forceClose))];
+}
+// --- audio ---
+let ctx;
+function tick(f,v){if(muted)return;try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;g.gain.value=(v||.06)*S.vol;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.04)}catch(e){}}
+function say(t,nr){if(!nr)lastSpoken=t;if(muted||recording||priBusy)return;try{speechSynthesis.cancel();{const u=makeU(t);u.onstart=()=>{spk=true};u.onend=u.onerror=()=>{spk=false;spkEnd=Date.now()};speechSynthesis.speak(u)}}catch(e){}}
+
+// --- menu model: each item {l:label, s:spoken on scroll, c:click fn} ---
+function list(){
+ if(level==="main")return [go("Art","gallery","Art. Scroll through the paintings."),{l:"Ask AI",s:"Ask AI",c:()=>{askCtx=null;askBack="main";hist=[];lastAns="";level="ask";pos.ask=0;render();say("Ask AI. Speak or type a question.")}},go("Clock","clock","Clock. Date, time, timers, and stopwatch."),go("Converter","convert","Converter. Pick a conversion."),go("Equation","eq","Equation. Scroll to pick a number or symbol, click to type it."),go("Fun","fun","Fun."),go("Notes","notes","Notes. Record or type a note."),go("Settings","settings","Settings. Speed, volume, and voice.")];
+ if(level==="gallery")return [go("Artworks","cats","Artworks. Pick a type."),go("Vocabulary","vocab","Vocabulary. "+VOCAB.length+" terms."),go("Flashcards","flash","Flashcards."),{l:"Back",s:"Back",c:backMain}];
+ if(level==="cats")return [...CATS.map(c=>({l:c.t,s:c.t,c:()=>{curC=c;level="guide";pos.guide=0;render();say(c.t+". "+c.works.length+" works.")}})),backTo("gallery")];
+ if(level==="guide")return [...curC.works.map(a=>({l:a.t,s:a.t,c:()=>openArt(a,"guide")})),backTo("cats")];
+ if(level==="vocab")return [...VOCAB.map(v=>({l:v.t,s:v.t,c:()=>{curT=v;level="term";pos.term=0;render();say(v.t+". "+v.d)}})),backTo("gallery")];
+ if(level==="term")return [{l:"Definition",s:"Definition",c:()=>{show(curT.d);say(curT.d)}},
+  {l:"Used in",s:"Used in",c:()=>{const t=curT.t+" is used in: "+(curT.works.length?curT.works.map(w=>w.t).join(", "):"none of the key works")+"."+(curT.note?" "+curT.note:"");show(t);say(t)}},
+  ...curT.works.map(a=>({l:a.t,s:a.t,c:()=>openArt(a,"term")})),GI("Tell me more",()=>wiki(curT.t)),backTo("vocab")];
+ if(level==="clock")return clockList();
+ if(level==="timers")return timersList();
+ if(level==="custom")return customList();
+ if(level==="stopwatch")return swList();
+ if(level==="fun")return funList();
+ if(level==="convert")return convertList();
+ if(level==="eqmore")return eqMoreList();
+ if(level==="flash")return flashList();
+ if(level==="music")return musicList();
+ if(level==="metro")return metroList();
+ if(level==="games")return gamesList();
+ if(level==="musictab")return musicTabList();
+ if(level==="rand")return randList();
+ if(level==="morse")return morseList();
+ if(level==="ask")return askList();
+ if(level==="aiset")return aiSetList();
+ if(level==="note")return noteList();
+ if(level==="suggest")return sugList();
+ if(level==="taker")return takerList();
+ if(level==="compass")return compassList();
+ if(level==="entry")return entryList();
+ if(level==="mlearn")return mlearnList();
+ if(level==="mquiz")return mquizList();
+ if(level==="mkey")return mkeyList();
+ if(level==="pitchmenu")return pitchMenuList();
+ if(level==="learn")return learnList();
+ if(level==="pitch")return pitchList();
+ if(level==="react")return reactList();
+ if(level==="safe")return safeList();
+ if(level==="guess")return guessList();
+ if(level==="time")return tlList();
+ if(level==="drums")return drumsList();
+ if(level==="convnum")return convnumList();
+ if(level==="settings")return settingsList();
+ if(level==="audio")return audioList();
+ if(level==="slot")return slotList();
+ if(level==="typing")return typingList();
+ if(level==="chars")return charsList();
+ if(level==="art"){
+  const f=(l,v)=>({l,s:l,c:()=>{show(v);say(l+": "+v)}}),NL="Not listed in the study guide",tv=VOCAB.filter(v=>v.works.includes(cur)).map(v=>v.t);
+  const L=[f("Date",cur.date),f("Description",cur.desc),f("Location",cur.loc||NL),f("Medium",cur.medium||NL),f("Period",cur.culture)];
+  if(tv.length)L.push(f("Vocabulary",tv.join(", ")));
+  L.push(GI("Tell me more",()=>wiki(cur.t,WH[cur.t])),GI("Ask AI about this",()=>{askCtx=cur;askBack="art";hist=[];lastAns="";level="ask";pos.ask=0;render();say("Ask AI about "+cur.t+".")}),backTo(artBack));return L;
+ }
+ if(level==="notes")return notesList();
+ if(level==="ctrl")return ctrlList();
+ const L=eqItems.map(typT);L.push(go("More symbols","eqmore","More symbols. Powers, roots, brackets, x, and the equal sign."));
+ L.push({l:"Equals",s:"Equals",c:equals},
+  {l:"Solve for x",s:"Solve for x",c:solve},
+  {l:"Voice typing",s:"Voice typing",c:listen},
+  {l:"Read",s:"Read",c:()=>say(expr.trim()?spoken(expr):"Nothing typed yet")},
+  {l:"Delete",s:"Delete",c:()=>{expr=expr.trimEnd();expr=expr.endsWith("√(")?expr.slice(0,-2):expr.slice(0,-1);expr=expr.trimEnd();disp();say("Deleted")}},
+  {l:"Clear",s:"Clear",c:()=>{expr="";disp();say("Cleared")}},
+  {l:"Back",s:"Back",c:()=>{level="main";render();say("Back. "+list()[pos.main].s)}});
+ return L;
+}
+function spoken(e){return e.replace(/√\(|[+\-*\/^().=π]/g,m=>" "+SYM[m]+" ").replace(/\s+/g," ").trim()}
+function evalJS(s){s=s.replace(/π/g,"Math.PI");return Function('"use strict";return ('+s.replace(/√\(/g,"Math.sqrt(").replace(/\^/g,"**")+')')()}
+function equals(){
+ const e=expr.trim();
+ if(!e){say("Nothing typed yet");return}
+ if(/[x=]/.test(e)){say("For equations with x, use solve for x");return}
+ if(!/^[0-9+\-*\/.^()√π ]+$/.test(e)){say("That equation doesn't work");return}
+ let r;try{r=evalJS(e)}catch(_){r=NaN}
+ if(typeof r!=="number"||isNaN(r)){say("That equation doesn't work");return}
+ if(!isFinite(r)){say("You can't divide by zero");return}
+ r=parseFloat(r.toFixed(10));
+ const msg=spoken(e)+" equals "+String(r).replace("-","minus ");
+ expr=String(r);disp();show(String(r));say(msg);
+}
+function solve(){
+ const e=expr.trim(),p=e.split("=");
+ if(p.length!==2||!p[0].trim()||!p[1].trim()||!/x/.test(e)){say("Type an equation with x and an equal sign first");return}
+ if(!/^[0-9+\-*\/.^()√πx= ]+$/.test(e)){say("That equation doesn't work");return}
+ const js=s=>s.replace(/π/g,"Math.PI").replace(/(\d|\))\s*x/g,"$1*x").replace(/√\(/g,"Math.sqrt(").replace(/\^/g,"**");
+ let f;try{f=Function("x",'"use strict";return ('+js(p[0])+')-('+js(p[1])+')');f(1)}catch(_){say("That equation doesn't work");return}
+ const roots=[],add=r=>{r=parseFloat(r.toFixed(8));if(Math.abs(r)<1e-9)r=0;if(!roots.some(q=>Math.abs(q-r)<1e-6))roots.push(r)};
+ const bis=(a,b)=>{let fa=f(a);for(let k=0;k<100;k++){const m=(a+b)/2,fm=f(m);if(fa*fm<=0)b=m;else{a=m;fa=fm}}const r=(a+b)/2;if(Math.abs(f(r))<1e-6)add(r)};
+ let px=-1000,pv=f(px),ppv=NaN;
+ for(let k=1;k<=200000;k++){
+  const x=-1000+k*0.01,v=f(x);
+  if(isFinite(pv)&&isFinite(v)){
+   if(pv===0)add(px);
+   else if(pv*v<0)bis(px,x);
+   else if(isFinite(ppv)&&Math.abs(pv)<Math.abs(ppv)&&Math.abs(pv)<=Math.abs(v)&&Math.abs(pv)<1e-3){
+    let a=px-0.01,b=x;
+    for(let j=0;j<80;j++){const m1=a+(b-a)/3,m2=b-(b-a)/3;if(Math.abs(f(m1))<Math.abs(f(m2)))b=m2;else a=m1}
+    if(Math.abs(f((a+b)/2))<1e-9)add((a+b)/2);
+   }
+  }
+  ppv=pv;px=x;pv=v;
+ }
+ roots.sort((a,b)=>a-b);
+ if(!roots.length){show("No solution found from -1000 to 1000");say("I couldn't find a solution between minus 1000 and 1000");return}
+ const r5=roots.slice(0,5);
+ show("x = "+r5.join(" or "));
+ say("x equals "+r5.map(n=>String(n).replace("-","minus ")).join(", or "));
+}
+const U={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+const NW=Object.keys(U).join("|")+"|hundred|thousand";
+function words2num(s){
+ return s.replace(new RegExp("\\b(?:"+NW+")(?:[\\s-]+(?:"+NW+"))*\\b","g"),run=>{
+  let tot=0,cur=0;
+  for(const w of run.split(/[\s-]+/)){if(w==="hundred")cur=(cur||1)*100;else if(w==="thousand"){tot+=(cur||1)*1000;cur=0}else cur+=U[w]}
+  return " "+(tot+cur)+" ";
+ });
+}
+function parseMath(t){
+ t=words2num(" "+t.toLowerCase().replace(/,/g,"").replace(/\bpi\b/g,"π")+" ");
+ t=t.replace(/(\d)\s*\.?\s*point\s*(\d)/g,"$1.$2")
+  .replace(/square root of\s*(\d+(?:\.\d+)?|x)/g,"√($1)")
+  .replace(/multiplied by|times|×/g,"*").replace(/divided by|\bover\b|÷/g,"/")
+  .replace(/\bplus\b/g,"+").replace(/\bminus\b|\bnegative\b|−/g,"-")
+  .replace(/to the power of|raised to the power of|raised to|power of|to the power/g,"^")
+  .replace(/squared/g,"^2").replace(/cubed/g,"^3")
+  .replace(/equals|equal to|equal/g,"=")
+  .replace(/\bpoint\b/g,".").replace(/open (?:parenthesis|bracket)/g,"(").replace(/close (?:parenthesis|bracket)/g,")")
+  .replace(/(\d)\s*x\s*(?=\d)/g,"$1*").replace(/\s+/g,"");
+ if(!/^[0-9+\-*\/.^()√x=π]+$/.test(t))return null;
+ return t.replace(/([+\-*\/^=])/g," $1 ").replace(/\s+/g," ").trim();
+}
+// --- display ---
+function disp(){$("expr").textContent=(level==="eq"||level==="eqmore")?expr.replace(/\*/g,"×").replace(/\//g,"÷"):""}
+function show(d){$("detail").textContent=d||""}
+function render(){
+ const L=list();if(pos[level]>=L.length)pos[level]=0;const i=pos[level],it=L[i];
+ $("crumb").textContent=({main:"Menu",art:cur&&cur.t,eq:"Equation",notes:"Notes",gallery:"Art",clock:"Clock",timers:"Timers",custom:"Custom timer",stopwatch:"Stopwatch",fun:"Fun",cats:"Artworks",guide:curC&&curC.t,vocab:"Vocabulary",term:curT&&curT.t,flash:"Flashcards",eqmore:"More symbols",music:"Music maker",metro:"Metronome",games:"Games",musictab:"Music",rand:"Randomizers",guess:"Guess the number",time:"Timeline game",ask:(askCtx?"Ask AI · "+askCtx.t:"Ask AI"),entry:(en.p==="ask"?"Ask AI":"AI instructions"),aiset:"AI settings",taker:"AI note taker",compass:"Compass",note:"Note",suggest:"Suggestions",bship:"Audio battleship",maze:"Audio maze",morse:"Morse code",mlearn:"Learn Morse",mquiz:"Morse quiz",mkey:"Telegraph key",pitchmenu:"Perfect pitch",learn:"Learn notes",pitch:"Pitch quiz",react:"Reaction time",safe:"Safe cracker",drums:"Drum pad",convert:"Converter",convnum:conv&&conv.n,settings:"Settings",audio:"Audio",slot:"Audio slot "+(curSlot+1),typing:"Typing",chars:"Characters",ctrl:"Controls"})[level]+(mutedAll?" · 🔇 all muted":muted?" · 🔇 muted":"")+(MIC.run?" · 🎤"+(qaOn?" quick answers":recording?" recording":""):"");
+ $("count").textContent=(i+1)+" of "+L.length;
+ $("item").textContent=it.l;
+ show(detailFor());
+ disp();
+}
+function move(dir){
+ const L=list();
+ pos[level]=(pos[level]+dir+L.length)%L.length;
+ if(level!=="music")tick(300+pos[level]*40);
+ render();
+ {const it=L[pos[level]];if(it.p)it.p();else say(it.s)}
+ try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}
+}
+// --- audio import, notes, tools, controls ---
+const slots=[null,null,null,null,null];let curSlot=0;
+const fi=document.createElement("input");fi.type="file";fi.accept="audio/*";fi.style.display="none";document.body.appendChild(fi);
+fi.addEventListener("click",e=>e.stopPropagation());
+const audVol=m=>slots.forEach(s=>{if(s)s.el.volume=Math.max(0,Math.min(1,s.vol*m))});
+const rer=()=>{if(level==="audio"||level==="slot")render()};
+function mkSlot(k,name,blob,vol){
+ const old=slots[k];if(old){old.el.pause();try{URL.revokeObjectURL(old.url)}catch(e){}}
+ const vl=vol==null?.5:vol,url=URL.createObjectURL(blob),el=new Audio(url);
+ el.muted=mutedAll;el.volume=vl*S.vol;el.onplay=el.onpause=el.onended=rer;
+ slots[k]={name,url,el,blob,vol:vl};
+}
+const volItems=s=>[["Louder",.1],["Quieter",-.1],["Slightly louder",.05],["Slightly quieter",-.05]].map(([l,d])=>({l,s:l,c:()=>{
+ if(!s){say("Slot is empty");return}
+ s.vol=Math.max(0,Math.min(1,Math.round((s.vol+d)*100)/100));s.el.volume=s.vol*S.vol;
+ idbPut(curSlot,{name:s.name,blob:s.blob,vol:s.vol});render();say(Math.round(s.vol*100)+" percent");
+}}));
+fi.onchange=()=>{
+ const f=fi.files[0];fi.value="";if(!f)return;
+ const name=f.name.replace(/\.[^.]+$/,"").slice(0,30),k=curSlot;
+ mkSlot(k,name,f);idbPut(k,{name,blob:f,vol:.5});rer();say("Imported "+name+" into slot "+(k+1)+". Saved for next time.");
+};
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open("mm",1);r.onupgradeneeded=()=>r.result.createObjectStore("audio");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function idbPut(k,v){try{(await idb()).transaction("audio","readwrite").objectStore("audio").put(v,k)}catch(e){}}
+async function idbDel(k){try{(await idb()).transaction("audio","readwrite").objectStore("audio").delete(k)}catch(e){}}
+async function idbLoad(){
+ try{
+  const st=(await idb()).transaction("audio").objectStore("audio");
+  await new Promise(res=>{const rq=st.openCursor();rq.onsuccess=()=>{const c=rq.result;if(c){if(c.key<5&&c.value&&c.value.blob)mkSlot(c.key,c.value.name,c.value.blob,c.value.vol);c.continue()}else res()};rq.onerror=()=>res()});
+  rer();
+ }catch(e){}
+}
+idbLoad();
+try{Object.assign(S,JSON.parse(localStorage.getItem("mm_settings")||"{}"))}catch(e){}
+const saveS=()=>{try{localStorage.setItem("mm_settings",JSON.stringify(S))}catch(e){}};
+const applyVis=()=>{try{document.documentElement.classList.toggle("novis",!!(S.noVis||panic));document.body.classList.toggle("novis",!!(S.noVis||panic))}catch(e){}};applyVis();
+function makeU(t){
+ const u=new SpeechSynthesisUtterance(t);u.rate=S.rate;u.volume=S.vol;u.lang="en-US";
+ if(S.voice){try{const v=speechSynthesis.getVoices().find(x=>x.name===S.voice);if(v){u.voice=v;u.lang=v.lang}}catch(e){}}
+ return u;
+}
+let notes=[],rec=null,curNote=null,live="",sureK="",sureT=0;const timers=[];
+try{notes=JSON.parse(localStorage.getItem("mm_notes")||"[]")}catch(e){notes=[]}
+function saveNotes(){try{localStorage.setItem("mm_notes",JSON.stringify(notes))}catch(e){}}
+const fmt=ts=>new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+function sure(k,msg,fn){if(sureK===k&&Date.now()-sureT<5000){sureK="";fn()}else{sureK=k;sureT=Date.now();say(msg)}}
+function showRec(){if((level==="notes"||level==="taker")&&recording)show("● "+(curNote?curNote.text:"")+(live?" "+live:""))}
+function notesList(){
+ const n=notes.length,I=(l,c)=>({l,s:l,c});
+ const L=[I(recording?"Stop recording":"Record note",toggleRec),go("Type note","typing","Typing. Scroll through the letters and click to type."),go("AI note taker","taker","AI note taker. Record a long session and I will make study notes."),
+  I("Read all notes",()=>{if(!n){say("No notes yet");return}say(notes.slice().reverse().map((x,k)=>"Note "+(k+1)+". "+x.text).join(". "))})];
+ notes.forEach((x,k)=>{const nm="Note "+(n-k);L.push(I(nm,()=>{curN=k;level="note";pos.note=0;render();show(x.text);say(nm+", recorded "+fmt(x.t)+". "+x.text)}))});
+ L.push(I("Clean up newest note",()=>{if(!n){say("No notes yet");return}cleanNote(0)}),I("Delete newest note",()=>{if(!n){say("No notes to delete");return}sure("del","Click again to delete the newest note",()=>{notes.shift();saveNotes();render();say("Deleted")})}),
+  I("Clear all notes",()=>{if(!n){say("No notes to clear");return}sure("clr","Click again to delete all notes",()=>{notes=[];saveNotes();render();say("All notes cleared")})}),
+  I("Back",()=>{stopRec();level="main";render();say("Back. "+list()[pos.main].s)}));
+ return L;
+}
+let priBusy=false,beeps=true,swEl=0,swStart=0,swLaps=[],cbuf="";
+function go(l,lv,msg){return {l,s:l,c:()=>{level=lv;pos[lv]=pos[lv]||0;render();say(msg)}}}
+function backMain(){stopRec();level="main";render();say("Back. "+list()[pos.main].s)}
+function backTo(lv){return {l:"Back",s:"Back",c:()=>{level=lv;render();say("Back. "+list()[pos[lv]].s)}}}
+function sayPri(t){
+ lastSpoken=t;
+ if(muted||recording)return;
+ try{
+  speechSynthesis.cancel();
+  const u=makeU(t);
+  priBusy=true;audVol(.2*S.vol);
+  const done=()=>{priBusy=false;spk=false;spkEnd=Date.now();audVol(S.vol)};u.onstart=()=>{spk=true};
+  u.onend=done;u.onerror=done;speechSynthesis.speak(u);setTimeout(done,15000);
+ }catch(e){priBusy=false}
+}
+function tdur(s){
+ const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60,p=[];
+ if(h)p.push(h+(h>1?" hours":" hour"));
+ if(m)p.push(m+(m>1?" minutes":" minute"));
+ if(r||!p.length)p.push(r+(r!==1?" seconds":" second"));
+ return p.join(" and ");
+}
+function addTimer(sec,label,msg,chain){timers.push({end:Date.now()+sec*1000,total:sec,last:sec,label,chain});say(msg||("Timer set for "+tdur(sec)))}
+function alarm(t){[0,250,500].forEach(d=>setTimeout(()=>tick(880),d));sayPri(t.label+" is done. Time is up.");if(t.chain)t.chain()}
+function tickTimers(){
+ const now=Date.now();
+ for(let k=timers.length-1;k>=0;k--){
+  const t=timers[k],rem=Math.ceil((t.end-now)/1000);
+  if(rem<=0){timers.splice(k,1);alarm(t);continue}
+  let beep=false,ann=0;
+  for(let s=t.last-1;s>=rem;s--){
+   if(s>0&&s%60===0)beep=true;
+   if(s>0&&(s%300===0||s===120||s===60))ann=s;
+  }
+  t.last=rem;
+  if(beep&&beeps)tick(1300,.02);
+  if(ann)sayPri(t.label+", "+tdur(ann)+" left");
+ }
+}
+setInterval(tickTimers,500);
+function checkTimers(){
+ if(!timers.length){say("No timers running");show("No timers running");return}
+ const m=timers.map(t=>t.label+", "+tdur(Math.max(0,Math.ceil((t.end-Date.now())/1000)))+" left").join(". ");
+ show(m);say(m);
+}
+function clockList(){
+ const I=(l,c)=>({l,s:l,c});
+ return [
+  I("Date",()=>{const s=new Date().toLocaleDateString([],{weekday:"long",month:"long",day:"numeric",year:"numeric"});show(s);say("Today is "+s)}),
+  I("Time",()=>{const s=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});show(s);say("It is "+s)}),
+  go("Timers","timers","Timers."),go("Stopwatch","stopwatch","Stopwatch."),backTo("main")];
+}
+function timersList(){
+ const I=(l,c)=>({l,s:l,c}),P=m=>I(m+" minute"+(m>1?"s":""),()=>addTimer(m*60,m+" minute timer"));
+ return [P(1),P(5),P(10),go("Custom timer","custom","Custom timer. Type a length or a clock time."),
+  I("Check timers",checkTimers),
+  I("Minute beeps: "+(beeps?"on":"off"),()=>{beeps=!beeps;render();say("Minute beeps "+(beeps?"on":"off"))}),
+  I("Cancel timers",()=>{timers.length=0;say("Timers cancelled")}),
+  backTo("clock")];
+}
+function cspeak(){return cbuf.replace(/h/g," hours ").replace(/m/g," minutes ").replace(/s/g," seconds ").replace(/:/g," colon ").replace(/\s+/g," ").trim()}
+function parseCustom(){
+ const b=cbuf.trim();if(!b)return null;
+ if(/:|AM|PM/.test(b)){
+  const m=b.match(/^(\d{1,2})(?::?(\d{2}))?\s*(AM|PM)?$/);if(!m)return null;
+  const h=+m[1],mi=+(m[2]||0),ap=m[3];if(mi>59||h>24)return null;
+  const now=new Date(),c=[];
+  const hs=ap?[(h%12)+(ap==="PM"?12:0)]:(h>12||h===0)?[h%24]:[h%12,(h%12)+12];
+  hs.forEach(hh=>[0,1].forEach(d=>{const t=new Date(now);t.setDate(t.getDate()+d);t.setHours(hh,mi,0,0);c.push(t)}));
+  const t=c.filter(x=>x>now).sort((a,b)=>a-b)[0];if(!t)return null;
+  const ts=t.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),sec=Math.round((t-now)/1000);
+  return {sec,label:"timer for "+ts,msg:"Timer set for "+ts+", that is in "+tdur(sec)};
+ }
+ if(!/^[\dhms ]+$/.test(b))return null;
+ let sec=0,ok=false;
+ for(const [r,mul] of [[/(\d+)\s*h/,3600],[/(\d+)\s*m/,60],[/(\d+)\s*s/,1]]){const m=b.match(r);if(m){sec+=m[1]*mul;ok=true}}
+ return ok&&sec>0?{sec,label:tdur(sec)+" timer"}:null;
+}
+function customList(){
+ const I=(l,c)=>({l,s:l,c}),add=(t,sp)=>I(sp||t.trim(),()=>{cbuf+=t;render();say(sp||t.trim())});
+ const L=[..."0123456789"].map(d=>add(d));
+ L.push(add(":","Colon"),add("h ","Hours"),add("m ","Minutes"),add("s ","Seconds"),add(" AM","A M"),add(" PM","P M"),
+  I("Start timer",()=>{
+   const p=parseCustom();
+   if(!p){say("I can't read that. Type a number then hours, minutes, or seconds. Or a clock time with a colon, or A M or P M.");return}
+   addTimer(p.sec,p.label,p.msg);cbuf="";level="timers";render();
+  }),
+  I("Read",()=>say(cbuf.trim()?cspeak():"Nothing typed yet")),
+  I("Delete",()=>{cbuf=cbuf.trimEnd().slice(0,-1);render();say("Deleted")}),
+  I("Clear",()=>{cbuf="";render();say("Cleared")}),backTo("timers"));
+ return L;
+}
+const swNow=()=>swEl+(swStart?Date.now()-swStart:0);
+function swList(){
+ const I=(l,c)=>({l,s:l,c});
+ return [
+  I(swStart?"Pause stopwatch":swEl?"Resume stopwatch":"Start stopwatch",()=>{
+   if(swStart){swEl+=Date.now()-swStart;swStart=0;render();say("Paused at "+tdur(Math.floor(swEl/1000)))}
+   else{const re=swEl>0;swStart=Date.now();render();say(re?"Resumed":"Started")}
+  }),
+  I("Check time",()=>{const m="It has been "+tdur(Math.floor(swNow()/1000));show(m);say(m)}),
+  I("Lap",()=>{
+   if(!swNow()){say("Start the stopwatch first");return}
+   const c=Math.floor(swNow()/1000),sp=c-(swLaps.length?swLaps[swLaps.length-1]:0);swLaps.push(c);
+   const m="Lap "+swLaps.length+", "+tdur(sp);show(m);say(m);
+  }),
+  I("Read laps",()=>{
+   if(!swLaps.length){say("No laps yet");return}
+   const m=swLaps.map((c,k)=>"Lap "+(k+1)+", "+tdur(c-(k?swLaps[k-1]:0))).join(". ");show(m);say(m);
+  }),
+  I("Reset",()=>{swEl=0;swStart=0;swLaps=[];render();say("Reset")}),
+  backTo("clock")];
+}
+function funList(){return [go("Games","games","Games."),go("Music","musictab","Music."),go("Randomizers","rand","Randomizers."),go("Compass","compass","Compass. Hold the phone flat."),backTo("main")]}
+function detailFor(){
+ if(level==="eq"||level==="eqmore")return "Click to type this";
+ if(level==="term")return curT.d;
+ if(level==="music")return "Melody: "+melody.length+" notes · "+mbpm+" beats per minute";
+ if(level==="guess")return "Typed: "+gbuf+"\nGuesses this game: "+gN+" · Range 1 to "+gR;
+ if(level==="time")return "Score "+tS[0]+" of "+tS[1];
+ if(level==="pitch")return "Score "+pS[0]+" of "+pS[1]+" · Streak "+pS[2];
+ if(level==="mquiz")return "Score "+mSc[0]+" of "+mSc[1];
+ if(level==="mkey")return "Hold the left button: short = dot, long = dash.\nText: "+kTxt+"\nSending: "+pretty(kSeq);
+ if(level==="react")return rS==="go"?"CLICK NOW!":rS==="wait"?"Wait for the beep...":rBest?"Best: "+rBest+" ms":"Click to start";
+ if(level==="safe")return "Lock "+(sc.stage+1)+" of 3 · Tries "+sc.tries;
+ if(level==="drums")return brec?"● Recording ("+beat.length+" hits)":beat.length?"Beat: "+beat.length+" hits":"";
+ if(level==="metro")return "Tempo: "+bpm+" beats per minute"+(metroT?" · running":"");
+ if(level==="custom")return "Typed: "+(cbuf.trim()||"nothing yet");
+ if(level==="convnum")return conv.a+" to "+conv.b+"\nTyped: "+(nbuf||"nothing yet");
+ if(level==="typing"||level==="chars"||level==="entry")return "Typed: "+curBuf()+"▍";
+ if(level==="ask")return (askCtx?"About: "+askCtx.t+"\n\n":"")+lastAns;
+ if(level==="aiset")return aiSummary();
+ if(level==="note")return notes[curN]?notes[curN].text:"";
+ if(level==="slot"){const s=slots[curSlot];return s?s.name+"\nVolume "+Math.round(s.vol*100)+"%":"Empty slot"}
+ if(level==="settings")return "Speed "+S.rate.toFixed(1)+"x · Volume "+Math.round(S.vol*100)+"% · Voice: "+(S.voice||"default");
+ return "";
+}
+function audioList(){
+ const L=slots.map((s,k)=>({l:(k+1)+": "+(s?s.name+" · "+Math.round(s.vol*100)+"%"+(s.el.paused?"":" ▶"):"empty"),s:"Slot "+(k+1)+(s?", "+s.name+(s.el.paused?"":", playing"):", empty"),c:()=>{curSlot=k;level="slot";pos.slot=0;render();say("Slot "+(k+1)+(s?", "+s.name:", empty"))}}));
+ L.push({l:"Stop all",s:"Stop all",c:()=>{slots.forEach(s=>{if(s){s.el.pause();s.el.currentTime=0}});render();say("Stopped")}},backTo("ctrl"));
+ return L;
+}
+function slotList(){
+ const s=slots[curSlot],I=(l,c)=>({l,s:l,c}),E=()=>say("Slot is empty. Choose import file.");
+ return [
+  I(s&&!s.el.paused?"Pause":"Play",()=>{if(!s)return E();if(s.el.paused)s.el.play().catch(()=>say("Could not play that file"));else s.el.pause()}),
+  I("Restart",()=>{if(!s)return E();s.el.currentTime=0;s.el.play().catch(()=>{})}),
+  I("Loop: "+(s&&s.el.loop?"on":"off"),()=>{if(!s)return E();s.el.loop=!s.el.loop;render();say("Loop "+(s.el.loop?"on":"off"))}),...volItems(s),
+  I(s?"Replace file":"Import file",()=>{fi.click()}),
+  I("Remove",()=>{if(!s)return E();sure("rm","Click again to remove "+s.name,()=>{s.el.pause();try{URL.revokeObjectURL(s.url)}catch(e){}slots[curSlot]=null;idbDel(curSlot);render();say("Removed")})}),
+  backTo("audio")];
+}
+function settingsList(){
+ const I=(l,c)=>({l,s:l,c}),chg=(k,d,lo,hi)=>{S[k]=Math.round(Math.max(lo,Math.min(hi,S[k]+d))*100)/100;saveS();audVol(S.vol);render();say("This is how I sound now")};
+ return [I("Faster",()=>chg("rate",.1,.5,2.5)),I("Slower",()=>chg("rate",-.1,.5,2.5)),I("Louder",()=>chg("vol",.1,.1,1)),I("Quieter",()=>chg("vol",-.1,.1,1)),
+  I("Next voice",()=>{
+   let v=[];try{v=speechSynthesis.getVoices().filter(x=>/^en/i.test(x.lang))}catch(e){}
+   if(!v.length){say("No other voices on this device");return}
+   const i=v.findIndex(x=>x.name===S.voice);S.voice=v[(i+1)%v.length].name;saveS();render();say("This is how I sound now");
+  }),
+  I("Test voice",()=>say("Hello! This is how I sound now.")),
+  I("No visuals mode: "+(S.noVis?"on":"off"),()=>{S.noVis=!S.noVis;saveS();applyVis();render();say(S.noVis?"No visuals mode on. The screen is now black and everything is spoken. Middle click opens controls.":"No visuals mode off")}),
+  I("Export backup",exportBackup),I("Import backup",()=>bi.click()),I("Test microphone",micTest),
+  I("Keep mic on: "+(S.micKeep===false?"off":"on"),()=>{S.micKeep=S.micKeep===false;saveS();if(!MIC.mode&&!keepMic())micStop();render();say("Keep mic on "+(S.micKeep===false?"off. You may be asked for the microphone more often.":"on. Fewer permission prompts."))}),
+  I("Reset settings",()=>{S.rate=.95;S.vol=1;S.voice="";S.noVis=false;saveS();applyVis();audVol(1);render();say("Settings reset")}),
+  backTo("main")];
+}
+const CP=[["miles","kilometers",1.609344],["feet","meters",.3048],["inches","centimeters",2.54],["pounds","kilograms",.45359237],["ounces","grams",28.349523],["gallons","liters",3.785411784],["cups","milliliters",236.588],["miles per hour","kilometers per hour",1.609344],["acres","hectares",.404686]];
+const CONV=[];
+CP.forEach(([a,b,k])=>{CONV.push({a,b,f:x=>x*k});CONV.push({a:b,b:a,f:x=>x/k})});
+CONV.push({a:"degrees Fahrenheit",b:"degrees Celsius",f:x=>(x-32)*5/9},{a:"degrees Celsius",b:"degrees Fahrenheit",f:x=>x*9/5+32});
+CONV.forEach(c=>c.n=c.a[0].toUpperCase()+c.a.slice(1)+" to "+c.b);
+let conv=null,nbuf="";
+function convertList(){return [...CONV.map(c=>({l:c.n,s:c.n,c:()=>{conv=c;nbuf="";level="convnum";pos.convnum=0;render();say(c.n+". Type a number.")}})),backTo("main")]}
+function convnumList(){
+ const I=(l,c)=>({l,s:l,c}),add=(t,sp)=>I(sp||t,()=>{nbuf+=t;render();say(sp||t)});
+ return [...[..."0123456789"].map(d=>add(d)),add(".","Point"),add("-","Minus"),
+  I("Convert",()=>{
+   const x=parseFloat(nbuf);if(isNaN(x)){say("Type a number first");return}
+   const r=Math.round(conv.f(x)*10000)/10000,m=x+" "+conv.a+" is "+r+" "+conv.b;
+   show(m);say(m.replace(/-(?=\d)/g,"minus "));
+  }),
+  I("Read",()=>say(nbuf?nbuf.replace(/-(?=\d)/g,"minus ").replace(".",". point "):"Nothing typed yet")),
+  I("Delete",()=>{nbuf=nbuf.slice(0,-1);render();say("Deleted")}),
+  I("Clear",()=>{nbuf="";render();say("Cleared")}),backTo("convert")];
+}
+let tbuf="",caps=false;
+try{tbuf=localStorage.getItem("mm_draft")||""}catch(e){}
+const saveDraft=()=>{try{localStorage.setItem("mm_draft",tbuf)}catch(e){}};
+const LN=["ay","bee","see","dee","ee","eff","gee","aitch","eye","jay","kay","ell","em","en","oh","pee","cue","ar","ess","tee","you","vee","double you","ex","why","zee"];
+const CN={".":"period",",":"comma","?":"question mark","!":"exclamation mark","'":"apostrophe",'"':"quote","-":"dash",":":"colon",";":"semicolon","@":"at sign","#":"hashtag","$":"dollar sign","%":"percent","&":"and sign","(":"open parenthesis",")":"close parenthesis","/":"slash","+":"plus","=":"equals","*":"asterisk","_":"underscore"};
+function typed(ch,sp){if(tTarget==="note"){tbuf+=ch;saveDraft()}else en.buf+=ch;render();say(sp)}
+function typingList(){
+ tTarget="note";
+ const I=(l,c)=>({l,s:l,c}),up=caps||/(^|[.!?]\s)$/.test(tbuf);
+ const L=[..."abcdefghijklmnopqrstuvwxyz"].map((ch,k)=>{const c2=up?ch.toUpperCase():ch;return {l:c2,s:LN[k],c:()=>typed(c2,LN[k])}});
+ L.push(I("Space",()=>typed(" ","space")),go("Characters","chars","Characters."),I("Keyboard",kbOn),
+  I("Caps: "+(caps?"on":"off"),()=>{caps=!caps;render();say("Caps "+(caps?"on":"off"))}),
+  I("Delete",()=>{tbuf=tbuf.slice(0,-1);saveDraft();render();say("Deleted")}),
+  I("Read",()=>say(tbuf.trim()||"Nothing typed yet")),
+  I("Save note",()=>{const t=tbuf.trim();if(!t){say("Nothing to save");return}notes.unshift({t:Date.now(),text:t,typed:true});saveNotes();tbuf="";saveDraft();render();say("Note saved")}),
+  I("Clear",()=>sure("tclr","Click again to clear what you typed",()=>{tbuf="";saveDraft();render();say("Cleared")})),
+  backTo("notes"));
+ return L;
+}
+function charsList(){
+ const I=(l,c)=>({l,s:l,c});
+ return [...[..."0123456789"].map(d=>I(d,()=>typed(d,d))),...Object.keys(CN).map(ch=>I(ch,()=>typed(ch,CN[ch]))),backTo(tTarget==="note"?"typing":"entry")];
+}
+function toggleCtrl(){
+ if(!started)return;
+ if(level==="ctrl"){level=from;render();say(list()[pos[level]].s);return}
+ from=level;level="ctrl";pos.ctrl=0;render();tick(600);say("Controls. "+list()[0].s);
+}
+// --- inputs ---
+document.addEventListener("wheel",e=>{
+ e.preventDefault();
+ if(!started||dead)return;
+ let d=e.deltaY;if(e.deltaMode===1)d*=33;
+ if(acc*d<0)acc=0;
+ acc+=d;
+ if(Math.abs(acc)>=40){move(acc>0?1:-1);acc=0}
+},{passive:false});
+document.addEventListener("click",e=>{
+ if(e.button!==0||e.target===fi||dead)return;
+ if(!started){started=true;tick(500);render();say("Ready. Scroll to move. Click to choose. "+list()[0].s);return}
+ if((level==="mkey"||level==="react")&&pos[level]===0)return;
+ if(Date.now()-downT>650){whereAmI();return}
+ tick(700);
+ list()[pos[level]].c();
+});
+document.addEventListener("mousedown",e=>{if(e.button!==0||dead||!started||pos[level]!==0)return;if(level==="react")reactPress();else if(level==="mkey")keyDown()});
+document.addEventListener("mouseup",e=>{if(e.button===0)keyUp()});
+let midT=0;
+document.addEventListener("mousedown",e=>{if(e.button===1){e.preventDefault();const n=Date.now();if(n-midT<450){midT=0;panicToggle();return}midT=n;toggleCtrl()}});
+document.addEventListener("auxclick",e=>{if(e.button===1)e.preventDefault()});
+</script>
+</body>
+</html>
