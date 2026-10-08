@@ -530,7 +530,7 @@ const keepMic=()=>S.micKeep!==false;
 let qaOn=false,qaHist=[],qaBusy=false,qaQueue="",lastQA="",taker=false,lastSpoken="",spk=false,spkEnd=0,wl=null,downT=0;
 const micModeEnd=()=>{if(!MIC.mode&&!keepMic())micStop()};
 function micGot(t){
- t=(t||"").trim();if(!t)return;
+ t=cleanDup((t||"").trim());if(!t)return;
  if(MIC.mode==="once"){clearTimeout(MIC.t);const cb=MIC.cb;MIC.mode=null;MIC.cb=null;micModeEnd();if(cb)cb(t)}
  else if(MIC.mode==="note")noteAppend(t);
  else if(MIC.mode==="qa"){if(!spk&&Date.now()-spkEnd>=900)qaGot(t)}
@@ -563,11 +563,15 @@ function micToggle(){
  if(MIC.run){stopRec();qaOn=false;MIC.mode=null;MIC.cb=null;micStop();render();say("Microphone off")}
  else if(micStart()){render();say("Microphone on")}
 }
+const cleanDup=t=>{let p;do{p=t;t=t.replace(/\b((?:\S+\s+){2,}\S+)\s+\1(?=\s|$)/gi,"$1")}while(t!==p);return t.trim()};
 function oneShot(cb){
  try{
-  const r=new SRC();r.lang="en-US";r.interimResults=false;
-  r.onresult=ev=>cb(ev.results[0][0].transcript);
-  r.onerror=ev=>say(ev.error==="not-allowed"||ev.error==="service-not-allowed"?"The microphone is blocked. "+blockedHelp():ev.error==="no-speech"?"I didn't hear anything":"Voice typing failed");
+  const r=new SRC();r.lang="en-US";r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
+  let done=false,last="";
+  const fin=t=>{if(done)return;done=true;t=cleanDup(t||"");if(t)cb(t);else say("I didn't hear anything")};
+  r.onresult=ev=>{const R=ev.results[ev.results.length-1],t=R[0].transcript;if(R.isFinal)fin(t);else{last=t;show("Heard: "+cleanDup(t))}};
+  r.onerror=ev=>{if(ev.error==="no-speech"){done=true;say("I didn't hear anything")}else if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){done=true;say("The microphone is blocked. "+blockedHelp())}else if(ev.error!=="aborted"){done=true;say("Voice typing failed")}};
+  r.onend=()=>{if(!done&&last)fin(last)};
   r.start();
  }catch(e){say("Voice typing is not available on this device")}
 }
@@ -575,13 +579,8 @@ function voiceText(cb){
  if(!SRC){say("Voice typing is not available on this device");return}
  if(recording||qaOn){say("Stop recording or quick answers first");return}
  try{speechSynthesis.cancel()}catch(e){}
- tick(900);
- if(!keepMic()){oneShot(cb);return}
- MIC.mode="once";MIC.cb=cb;
- if(!micStart()){MIC.mode=null;return}
- clearTimeout(MIC.t);clearTimeout(MIC.t2);
- MIC.t2=setTimeout(()=>{if(MIC.mode==="once"&&!MIC.started){MIC.mode=null;MIC.cb=null;micStop();S.micKeep=false;saveS();say("The shared microphone didn't start, so I switched to simple mode. Please try again. You can run the mic test from the controls menu.")}},10000);
- MIC.t=setTimeout(()=>{if(MIC.mode==="once"){MIC.mode=null;MIC.cb=null;micModeEnd();say("I didn't hear anything")}},12000);
+ if(MIC.run&&!MIC.mode)micStop();
+ tick(900);oneShot(cb);
 }
 async function micTest(){
  const proto=(location.protocol||"").replace(":","");
