@@ -525,7 +525,7 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("contextmenu",e=>{e.preventDefault();if(!started||dead)return;rcN++;clearTimeout(rcT);rcT=setTimeout(()=>{const n=rcN;rcN=0;rcAct(n)},320)});
 // ---- microphone manager (one shared recognizer = fewer permission prompts) ----
 const SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
-const MIC={r:null,run:false,mode:null,cb:null,segs:{},t:null};
+const MIC={r:null,run:false,mode:null,cb:null,segs:{},t:null,ub:"",hist:[],fin:new Map(),idleT:null,lastApp:""};
 const keepMic=()=>S.micKeep!==false;
 let qaOn=false,qaHist=[],qaBusy=false,qaQueue="",lastQA="",taker=false,lastSpoken="",spk=false,spkEnd=0,wl=null,downT=0;
 const micModeEnd=()=>{if(!MIC.mode&&!keepMic())micStop()};
@@ -537,17 +537,53 @@ function micGot(t){
 }
 function micLive(t){live=t;if(MIC.mode==="note")showRec();else if(MIC.mode==="once"||MIC.mode==="qa")show("Heard: "+t)}
 const blockedHelp=()=>/^(file|content)$/.test((location.protocol||"").replace(":",""))?"Phones often block the microphone for saved files. Open the app from a web address instead, or run the mic test from the controls menu.":"Tap the lock icon in the browser address bar, open permissions, and allow the microphone.";
+const normW=t=>t.toLowerCase().replace(/[^a-z0-9' ]/g," ").split(/\s+/).filter(Boolean);
+const normT=t=>normW(t).join(" ");
+function sameUtt(a,b){
+ const x=normW(a),y=normW(b);if(!x.length||!y.length)return false;
+ let p=0;while(p<x.length&&p<y.length&&x[p]===y[p])p++;
+ if(p>=Math.min(3,x.length,y.length))return true;
+ const sx=new Set(x),sy=new Set(y);let c=0;sx.forEach(w=>{if(sy.has(w))c++});
+ return c/Math.max(sx.size,sy.size)>=.7;
+}
+function micCommit(){
+ clearTimeout(MIC.idleT);const t=MIC.ub;MIC.ub="";if(!t)return;
+ MIC.hist.push({raw:t,n:normT(t),at:Date.now()});if(MIC.hist.length>12)MIC.hist.shift();
+ live="";
+ if(MIC.mode==="note")noteAppend(t);else if(MIC.mode==="qa")qaGot(t);
+}
+function extendLast(t){
+ if(!curNote||!MIC.lastApp||!curNote.text.endsWith(MIC.lastApp))return;
+ const base=curNote.text.slice(0,curNote.text.length-MIC.lastApp.length).trimEnd(),add=trimOverlap(base,t);
+ curNote.text=(base&&add?base+" ":base)+add;MIC.lastApp=add;saveNotes();showRec();
+}
+function micFeed(t,final){
+ t=cleanDup((t||"").trim());if(!t)return;
+ if(MIC.mode==="qa"&&(spk||Date.now()-spkEnd<900))return;
+ const n=normT(t);if(!n)return;
+ if(MIC.ub&&sameUtt(MIC.ub,t)){if(t.length>=MIC.ub.length)MIC.ub=t}
+ else{
+  const now=Date.now(),multi=n.indexOf(" ")>0;
+  if(MIC.hist.some(x=>now-x.at<20000&&(x.n===n||(multi&&x.n.includes(n))||(sameUtt(x.raw,t)&&n.length<=x.n.length))))return;
+  const last=MIC.hist[MIC.hist.length-1];
+  if(!MIC.ub&&last&&now-last.at<8000&&sameUtt(last.raw,t)&&n.length>last.n.length){
+   if(MIC.mode==="note"){extendLast(t);last.raw=t;last.n=n;last.at=now}
+   return;
+  }
+  micCommit();MIC.ub=t;
+ }
+ micLive(MIC.ub);clearTimeout(MIC.idleT);
+ if(final)micCommit();else MIC.idleT=setTimeout(micCommit,MIC.mode==="qa"?1600:2200);
+}
 function mkRec(){
  const r=new SRC();r.lang="en-US";r.continuous=true;r.interimResults=true;
  r.onstart=()=>{MIC.started=true};
- r.onresult=ev=>{for(let k=ev.resultIndex;k<ev.results.length;k++){const R=ev.results[k],t=R[0].transcript;
-  if(R.isFinal){const p=MIC.segs[k];delete MIC.segs[k];micGot(p&&p.length>t.length+3&&p.startsWith(t.slice(0,10))?p:t)}
-  else{MIC.segs[k]=t;micLive(t)}}};
+ r.onresult=ev=>{for(let k=ev.resultIndex;k<ev.results.length;k++){const R=ev.results[k];const tx=R[0].transcript||"",pv=MIC.fin.get(k);if(pv!==undefined&&tx.length<=pv)continue;if(R.isFinal)MIC.fin.set(k,tx.length);micFeed(tx,R.isFinal)}};
  r.onerror=ev=>{
   if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){MIC.run=false;recording=false;qaOn=false;MIC.mode=null;say("The microphone is blocked. "+blockedHelp())}
   else if(ev.error==="network")say("Voice typing needs an internet connection");
  };
- r.onend=()=>{if(MIC.r!==r)return;Object.keys(MIC.segs).forEach(k=>{const p=MIC.segs[k];delete MIC.segs[k];micGot(p)});if(MIC.run){try{r.start()}catch(e){}}};
+ r.onend=()=>{if(MIC.r!==r)return;micCommit();MIC.fin=new Map();if(MIC.run){try{r.start()}catch(e){}}};
  return r;
 }
 function micStart(){
@@ -555,7 +591,7 @@ function micStart(){
  if(MIC.run)return true;
  try{
   if(!MIC.r||!keepMic())MIC.r=mkRec();
-  MIC.started=false;MIC.run=true;MIC.r.start();return true;
+  MIC.started=false;MIC.fin=new Map();MIC.run=true;MIC.r.start();return true;
  }catch(e){if(e&&e.name==="InvalidStateError"){MIC.run=true;return true}MIC.run=false;say("Voice typing is not available on this device");return false}
 }
 function micStop(){MIC.run=false;MIC.segs={};try{MIC.r&&MIC.r.stop()}catch(e){}}
@@ -599,12 +635,11 @@ const trimOverlap=(prev,t)=>{const a=prev.trim().split(/\s+/),b=t.split(/\s+/);f
 function noteAppend(t){
  if(!curNote){curNote={t:Date.now(),text:"",session:taker};notes.unshift(curNote)}
  t=trimOverlap(curNote.text,t);if(!t||curNote.text.endsWith(t)){live="";return}
- curNote.text+=(curNote.text?" ":"")+t;
- saveNotes();live="";showRec();
+ curNote.text+=(curNote.text?" ":"")+t;MIC.lastApp=t;saveNotes();live="";showRec();
 }
 function stopRec(sp){
  if(!recording)return;
- Object.keys(MIC.segs).forEach(k=>{const p=MIC.segs[k];delete MIC.segs[k];noteAppend(p)});
+ micCommit();
  recording=false;MIC.mode=null;micModeEnd();wakeOff();
  const done=curNote,tk=taker;curNote=null;live="";taker=false;tick(500);
  if(sp){render();say("Saved. "+notes.length+(notes.length===1?" note.":" notes."))}
@@ -614,7 +649,7 @@ function toggleRec(tk){
  if(recording){stopRec(true);return}
  if(qaOn){say("Turn off quick answers first");return}
  try{speechSynthesis.cancel()}catch(e){}
- recording=true;taker=tk===true;curNote=null;live="";MIC.mode="note";
+ recording=true;taker=tk===true;curNote=null;live="";MIC.mode="note";MIC.hist=[];MIC.ub="";MIC.lastApp="";
  if(!micStart()){recording=false;MIC.mode=null;return}
  wakeOn();tick(900);render();showRec();
 }
@@ -635,14 +670,16 @@ function takerList(){
 }
 // ---- quick answer mode ----
 const QWORDS=/\b(what|why|how|when|where|who|whom|whose|which|does|did|can|could|would|should|explain|define|meaning|difference|tell me)\b/i;
+let qaErrT=0;
 async function qaGot(t){
- if(t.split(/\s+/).length<4||!QWORDS.test(t))return;
+ if(t.split(/\s+/).length<3||!QWORDS.test(t))return;
  qaQueue+=(qaQueue?" ":"")+t;if(qaBusy)return;qaBusy=true;
  while(qaQueue){
   const q=qaQueue;qaQueue="";qaHist.push({role:"user",content:q});show("Heard: "+q+"\n\nThinking...");
   let a=await aiCall("You are listening in on a spoken conversation or lecture. The latest text is a transcript chunk. If it contains a question, term or claim that deserves a quick answer and is not completely obvious, answer briefly in one or two plain sentences. If nothing needs an answer, reply with exactly NONE. Plain text only."+(S.aiCustom?" "+S.aiCustom:""),qaHist.slice(-6));
   a=capLen(a);
   if(a&&!/^none\b/i.test(a)){qaHist.push({role:"assistant",content:a});lastQA=a;show("Q: "+q+"\n\nA: "+a);if(qaOn)sayPri(a)}
+  else if(!a){qaHist.pop();show("Listening...");if(Date.now()-qaErrT>30000){qaErrT=Date.now();say("I heard a question but couldn't reach the AI. "+aiHelp())}}
   else{qaHist.pop();show("Listening...")}
  }
  qaBusy=false;
@@ -651,7 +688,7 @@ function qaToggle(){
  if(qaOn){qaOn=false;MIC.mode=null;micModeEnd();render();say("Quick answers off");return}
  if(recording){say("Stop recording first");return}
  if(!SRC){say("Voice typing is not available on this device");return}
- qaOn=true;MIC.mode="qa";qaHist=[];tick(900);
+ qaOn=true;MIC.mode="qa";MIC.hist=[];MIC.ub="";qaHist=[];tick(900);
  if(!micStart()){qaOn=false;MIC.mode=null;return}
  render();say("Quick answers on. I will answer questions I hear. It stays on until you turn it off.");
 }
@@ -935,7 +972,7 @@ try{notes=JSON.parse(localStorage.getItem("mm_notes")||"[]")}catch(e){notes=[]}
 function saveNotes(){try{localStorage.setItem("mm_notes",JSON.stringify(notes))}catch(e){}}
 const fmt=ts=>new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
 function sure(k,msg,fn){if(sureK===k&&Date.now()-sureT<5000){sureK="";fn()}else{sureK=k;sureT=Date.now();say(msg)}}
-function showRec(){if((level==="notes"||level==="taker")&&recording)show("● "+(curNote?curNote.text:"")+(live?" "+live:""))}
+function showRec(){if((level==="notes"||level==="taker")&&recording){const x=(curNote?curNote.text:"")+(live?" "+live:"");show("● "+(x.length>500?"…"+x.slice(-500):x))}}
 function notesList(){
  const n=notes.length,I=(l,c)=>({l,s:l,c});
  const L=[I(recording?"Stop recording":"Record note",toggleRec),go("Type note","typing","Typing. Scroll through the letters and click to type."),go("AI note taker","taker","AI note taker. Record a long session and I will make study notes."),
