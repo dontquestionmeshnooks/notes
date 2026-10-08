@@ -361,16 +361,19 @@ const aiSummary=()=>"Style: "+STY[S.aiStyle|0][0]+". Length limit: "+(S.aiMax?S.
 let aiLog=[],aiUsed="";
 const aiHelp=()=>S.geminiKey?"Check that your key is correct and that your internet works.":"The free service may have stopped free access. You can add a free Google Gemini key in AI settings, which is more reliable.";
 const badNotice=a=>a.length<700&&/(pollinations|deprecat|api key|legacy|sign up)/i.test(a);
+const fixRoles=m=>{const o=[];for(const x of m){if(!o.length&&x.role!=="user")continue;if(o.length&&o[o.length-1].role===x.role)o[o.length-1]={role:x.role,content:o[o.length-1].content+"\n"+x.content};else o.push({role:x.role,content:x.content})}return o};
+const withRetry=async f=>{try{return await f()}catch(e){if(/^(429|500|502|503)/.test((e&&e.message)||"")){await new Promise(r=>setTimeout(r,5000));return await f()}throw e}};
 async function aiCall(sys,msgs){
- aiLog=[];aiUsed="";let ans="";
+ msgs=fixRoles(msgs);aiLog=[];aiUsed="";let ans="";
+ if(!msgs.length)return "";
  if(S.geminiKey){
   try{
-   const j=await (await fetchJ("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key="+encodeURIComponent(S.geminiKey),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}))})})).json();
-   ans=((j.candidates&&j.candidates[0].content.parts)||[]).map(p=>p.text||"").join("").trim();if(ans)aiUsed="Gemini";
+   const j=await withRetry(async()=>(await fetchJ("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key="+encodeURIComponent(S.geminiKey),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}))})})).json());
+   ans=((j.candidates&&j.candidates[0].content.parts)||[]).map(p=>p.text||"").join("").trim();if(ans)aiUsed="Gemini";else aiLog.push("Gemini sent an empty answer");
   }catch(e){aiLog.push("Gemini: "+((e&&e.message)||"failed"))}
  }
  if(!ans)try{
-  const j=await (await fetchJ("https://text.pollinations.ai/openai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"openai-fast",messages:[{role:"system",content:sys},...msgs]})})).json();
+  const j=await withRetry(async()=>(await fetchJ("https://text.pollinations.ai/openai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"openai-fast",messages:[{role:"system",content:sys},...msgs]})})).json());
   ans=(j.choices[0].message.content||"").trim();if(badNotice(ans)){aiLog.push("Pollinations sent a notice instead of an answer");ans=""}else if(ans)aiUsed="Pollinations";
  }catch(e){aiLog.push("Pollinations: "+((e&&e.message)||"failed"))}
  if(!ans)try{
@@ -395,7 +398,7 @@ async function askAI(q){
  hist.push({role:"user",content:q});show("You: "+q+"\n\nThinking...");say("Thinking");
  const pulse=setInterval(()=>tick(400,.03),2000);
  let ans=await aiCall(sysPrompt(),hist.slice(-8));clearInterval(pulse);
- if(!ans){hist.pop();say("I couldn't reach the AI. "+aiHelp()+" You can run the AI test in AI settings.");return}
+ if(!ans){hist.pop();say("I couldn't reach the AI. "+(aiLog[0]||"")+". "+aiHelp());return}
  ans=capLen(ans);hist.push({role:"assistant",content:ans});lastAns=ans;
  show("You: "+q+"\n\n"+ans);say(ans);
 }
@@ -525,8 +528,8 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("contextmenu",e=>{e.preventDefault();if(!started||dead)return;rcN++;clearTimeout(rcT);rcT=setTimeout(()=>{const n=rcN;rcN=0;rcAct(n)},320)});
 // ---- microphone manager (one shared recognizer = fewer permission prompts) ----
 const SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
-const MIC={r:null,run:false,mode:null,cb:null,segs:{},t:null,ub:"",hist:[],fin:new Map(),idleT:null,lastApp:""};
-const keepMic=()=>S.micKeep!==false;
+const MIC={r:null,run:false,mode:null,cb:null,t:null,ub:"",hist:[],fin:new Map(),idleT:null,lastApp:"",active:false,endT:0,lastEv:0,fails:0,errT:0};
+const keepMic=()=>false;
 let qaOn=false,qaHist=[],qaBusy=false,qaQueue="",lastQA="",taker=false,lastSpoken="",spk=false,spkEnd=0,wl=null,downT=0;
 const micModeEnd=()=>{if(!MIC.mode&&!keepMic())micStop()};
 function micGot(t){
@@ -550,8 +553,11 @@ function micCommit(){
  clearTimeout(MIC.idleT);const t=MIC.ub;MIC.ub="";if(!t)return;
  MIC.hist.push({raw:t,n:normT(t),at:Date.now()});if(MIC.hist.length>12)MIC.hist.shift();
  live="";
- if(MIC.mode==="note")noteAppend(t);else if(MIC.mode==="qa")qaGot(t);
+ if(MIC.mode==="note")noteAppend(t);
+ else if(MIC.mode==="qa")qaFrag(t);
+ else if(MIC.mode==="once"){const cb=MIC.cb;MIC.mode=null;MIC.cb=null;clearTimeout(MIC.t);micStop();if(cb)cb(t)}
 }
+function qaFrag(t){qaBuf+=(qaBuf?" ":"")+t;clearTimeout(qaT);qaT=setTimeout(()=>{const q=qaBuf;qaBuf="";qaGot(q)},1300)}
 function extendLast(t){
  if(!curNote||!MIC.lastApp||!curNote.text.endsWith(MIC.lastApp))return;
  const base=curNote.text.slice(0,curNote.text.length-MIC.lastApp.length).trimEnd(),add=trimOverlap(base,t);
@@ -564,59 +570,51 @@ function micFeed(t,final){
  if(MIC.ub&&sameUtt(MIC.ub,t)){if(t.length>=MIC.ub.length)MIC.ub=t}
  else{
   const now=Date.now(),multi=n.indexOf(" ")>0;
-  if(MIC.hist.some(x=>now-x.at<20000&&(x.n===n||(multi&&x.n.includes(n))||(sameUtt(x.raw,t)&&n.length<=x.n.length))))return;
+  if(MIC.mode!=="once"&&MIC.hist.some(x=>now-x.at<20000&&(x.n===n||(multi&&x.n.includes(n))||(sameUtt(x.raw,t)&&n.length<=x.n.length))))return;
   const last=MIC.hist[MIC.hist.length-1];
-  if(!MIC.ub&&last&&now-last.at<8000&&sameUtt(last.raw,t)&&n.length>last.n.length){
-   if(MIC.mode==="note"){extendLast(t);last.raw=t;last.n=n;last.at=now}
-   return;
-  }
+  if(!MIC.ub&&last&&MIC.mode==="note"&&now-last.at<8000&&sameUtt(last.raw,t)&&n.length>last.n.length){extendLast(t);last.raw=t;last.n=n;last.at=now;return}
   micCommit();MIC.ub=t;
  }
  micLive(MIC.ub);clearTimeout(MIC.idleT);
- if(final)micCommit();else MIC.idleT=setTimeout(micCommit,MIC.mode==="qa"?1600:2200);
+ if(final)micCommit();else MIC.idleT=setTimeout(micCommit,MIC.mode==="qa"?1000:MIC.mode==="once"?1100:2200);
 }
 function mkRec(){
- const r=new SRC();r.lang="en-US";r.continuous=true;r.interimResults=true;
- r.onstart=()=>{MIC.started=true};
- r.onresult=ev=>{for(let k=ev.resultIndex;k<ev.results.length;k++){const R=ev.results[k];const tx=R[0].transcript||"",pv=MIC.fin.get(k);if(pv!==undefined&&tx.length<=pv)continue;if(R.isFinal)MIC.fin.set(k,tx.length);micFeed(tx,R.isFinal)}};
+ const r=new SRC();r.lang="en-US";r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
+ r.onstart=()=>{MIC.active=true;MIC.fails=0;MIC.lastEv=Date.now()};
+ r.onresult=ev=>{MIC.lastEv=Date.now();for(let k=ev.resultIndex;k<ev.results.length;k++){const R=ev.results[k],tx=R[0].transcript||"",pv=MIC.fin.get(k);if(pv!==undefined&&tx.length<=pv)continue;if(R.isFinal)MIC.fin.set(k,tx.length);micFeed(tx,R.isFinal)}};
  r.onerror=ev=>{
   if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){MIC.run=false;recording=false;qaOn=false;MIC.mode=null;say("The microphone is blocked. "+blockedHelp())}
-  else if(ev.error==="network")say("Voice typing needs an internet connection");
+  else if((ev.error==="audio-capture"||ev.error==="network")&&Date.now()-MIC.errT>20000){MIC.errT=Date.now();say(ev.error==="network"?"Voice typing needs an internet connection":"I can't use the microphone. Another app may be using it.")}
  };
- r.onend=()=>{if(MIC.r!==r)return;micCommit();MIC.fin=new Map();if(MIC.run){try{r.start()}catch(e){}}};
+ r.onend=()=>{if(MIC.r!==r)return;MIC.active=false;MIC.endT=Date.now();micCommit();setTimeout(micTick,150)};
  return r;
 }
 function micStart(){
  if(!SRC){say("Voice typing is not available on this device");return false}
- if(MIC.run)return true;
- try{
-  if(!MIC.r||!keepMic())MIC.r=mkRec();
-  MIC.started=false;MIC.fin=new Map();MIC.run=true;MIC.r.start();return true;
- }catch(e){if(e&&e.name==="InvalidStateError"){MIC.run=true;return true}MIC.run=false;say("Voice typing is not available on this device");return false}
+ if(!MIC.r)MIC.r=mkRec();
+ MIC.fin=new Map();MIC.run=true;MIC.fails=0;micTick();return true;
 }
-function micStop(){MIC.run=false;MIC.segs={};try{MIC.r&&MIC.r.stop()}catch(e){}}
+function micTick(){
+ if(!MIC.run||!MIC.r)return;
+ if(MIC.active){if(Date.now()-MIC.lastEv>20000){try{MIC.r.abort()}catch(e){}MIC.active=false;MIC.endT=Date.now()}return}
+ if(Date.now()-MIC.endT<120)return;
+ try{MIC.fin=new Map();MIC.lastEv=Date.now();MIC.r.start()}
+ catch(e){if(e&&e.name==="InvalidStateError")MIC.active=true;else if(++MIC.fails>10){MIC.run=false;MIC.mode=null;recording=false;qaOn=false;say("Voice typing isn't working right now")}}
+}
+setInterval(micTick,350);
+function micStop(){MIC.run=false;MIC.fails=0;try{MIC.r&&MIC.r.stop()}catch(e){}}
 function micToggle(){
  if(MIC.run){stopRec();qaOn=false;MIC.mode=null;MIC.cb=null;micStop();render();say("Microphone off")}
- else if(micStart()){render();say("Microphone on")}
+ else say("The microphone turns on by itself when you use a voice feature.");
 }
 const cleanDup=t=>{let p;do{p=t;t=t.replace(/\b((?:\S+\s+){2,}\S+)\s+\1(?=\s|$)/gi,"$1")}while(t!==p);return t.trim()};
-function oneShot(cb){
- try{
-  const r=new SRC();r.lang="en-US";r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
-  let done=false,last="";
-  const fin=t=>{if(done)return;done=true;t=cleanDup(t||"");if(t)cb(t);else say("I didn't hear anything")};
-  r.onresult=ev=>{const R=ev.results[ev.results.length-1],t=R[0].transcript;if(R.isFinal)fin(t);else{last=t;show("Heard: "+cleanDup(t))}};
-  r.onerror=ev=>{if(ev.error==="no-speech"){done=true;say("I didn't hear anything")}else if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){done=true;say("The microphone is blocked. "+blockedHelp())}else if(ev.error!=="aborted"){done=true;say("Voice typing failed")}};
-  r.onend=()=>{if(!done&&last)fin(last)};
-  r.start();
- }catch(e){say("Voice typing is not available on this device")}
-}
 function voiceText(cb){
  if(!SRC){say("Voice typing is not available on this device");return}
  if(recording||qaOn){say("Stop recording or quick answers first");return}
  try{speechSynthesis.cancel()}catch(e){}
- if(MIC.run&&!MIC.mode)micStop();
- tick(900);oneShot(cb);
+ tick(900);MIC.mode="once";MIC.cb=cb;MIC.hist=[];MIC.ub="";
+ if(!micStart()){MIC.mode=null;return}
+ clearTimeout(MIC.t);MIC.t=setTimeout(()=>{if(MIC.mode==="once"){MIC.mode=null;MIC.cb=null;micStop();say("I didn't hear anything. Try again.")}},12000);
 }
 async function micTest(){
  const proto=(location.protocol||"").replace(":","");
@@ -625,7 +623,7 @@ async function micTest(){
  say("Testing the microphone. If a permission box appears, choose allow.",true);
  try{const st=await navigator.mediaDevices.getUserMedia({audio:true});st.getTracks().forEach(t=>t.stop());gum="allowed"}
  catch(e){gum=e&&e.name==="NotAllowedError"?"blocked":e&&e.name==="NotFoundError"?"no microphone found":e&&e.name==="TypeError"?"not available on this kind of page":((e&&e.name)||"failed")}
- const m="Page type: "+proto+". Speech recognition: "+(SRC?"available":"not available")+". Microphone permission: "+perm+". Microphone test: "+gum+"."+(gum==="blocked"?" "+blockedHelp():gum==="allowed"?" The microphone works. If voice typing still fails, turn off Keep mic on in Settings.":"");
+ const m="Page type: "+proto+". Speech recognition: "+(SRC?"available":"not available")+". Microphone permission: "+perm+". Microphone test: "+gum+"."+(gum==="blocked"?" "+blockedHelp():gum==="allowed"?" The microphone works. If voice typing still fails, tell me what happens.":"");
  show(m);say(m,true);
 }
 function listen(){voiceText(t=>{const m=parseMath(t);show("Heard: "+t);if(m){expr=m;disp();say("Typed "+spoken(m))}else say("I heard "+t+", but could not turn it into math")})}
@@ -670,7 +668,7 @@ function takerList(){
 }
 // ---- quick answer mode ----
 const QWORDS=/\b(what|why|how|when|where|who|whom|whose|which|does|did|can|could|would|should|explain|define|meaning|difference|tell me)\b/i;
-let qaErrT=0;
+let qaErrT=0,qaBuf="",qaT=null;
 async function qaGot(t){
  if(t.split(/\s+/).length<3||!QWORDS.test(t))return;
  qaQueue+=(qaQueue?" ":"")+t;if(qaBusy)return;qaBusy=true;
@@ -679,16 +677,16 @@ async function qaGot(t){
   let a=await aiCall("You are listening in on a spoken conversation or lecture. The latest text is a transcript chunk. If it contains a question, term or claim that deserves a quick answer and is not completely obvious, answer briefly in one or two plain sentences. If nothing needs an answer, reply with exactly NONE. Plain text only."+(S.aiCustom?" "+S.aiCustom:""),qaHist.slice(-6));
   a=capLen(a);
   if(a&&!/^none\b/i.test(a)){qaHist.push({role:"assistant",content:a});lastQA=a;show("Q: "+q+"\n\nA: "+a);if(qaOn)sayPri(a)}
-  else if(!a){qaHist.pop();show("Listening...");if(Date.now()-qaErrT>30000){qaErrT=Date.now();say("I heard a question but couldn't reach the AI. "+aiHelp())}}
+  else if(!a){qaHist.pop();show("Listening...");if(Date.now()-qaErrT>30000){qaErrT=Date.now();say("I heard a question but couldn't reach the AI. "+(aiLog[0]||"")+". "+aiHelp())}}
   else{qaHist.pop();show("Listening...")}
  }
  qaBusy=false;
 }
 function qaToggle(){
- if(qaOn){qaOn=false;MIC.mode=null;micModeEnd();render();say("Quick answers off");return}
+ if(qaOn){qaOn=false;MIC.mode=null;qaBuf="";clearTimeout(qaT);micModeEnd();render();say("Quick answers off");return}
  if(recording){say("Stop recording first");return}
  if(!SRC){say("Voice typing is not available on this device");return}
- qaOn=true;MIC.mode="qa";MIC.hist=[];MIC.ub="";qaHist=[];tick(900);
+ qaOn=true;MIC.mode="qa";MIC.hist=[];MIC.ub="";qaBuf="";qaHist=[];tick(900);
  if(!micStart()){qaOn=false;MIC.mode=null;return}
  render();say("Quick answers on. I will answer questions I hear. It stays on until you turn it off.");
 }
@@ -1146,7 +1144,6 @@ function settingsList(){
   I("Test voice",()=>say("Hello! This is how I sound now.")),
   I("No visuals mode: "+(S.noVis?"on":"off"),()=>{S.noVis=!S.noVis;saveS();applyVis();render();say(S.noVis?"No visuals mode on. The screen is now black and everything is spoken. Middle click opens controls.":"No visuals mode off")}),
   I("Export backup",exportBackup),I("Import backup",()=>bi.click()),I("Test microphone",micTest),
-  I("Keep mic on: "+(S.micKeep===false?"off":"on"),()=>{S.micKeep=S.micKeep===false;saveS();if(!MIC.mode&&!keepMic())micStop();render();say("Keep mic on "+(S.micKeep===false?"off. You may be asked for the microphone more often.":"on. Fewer permission prompts."))}),
   I("Reset settings",()=>{S.rate=.95;S.vol=1;S.voice="";S.noVis=false;saveS();applyVis();audVol(1);render();say("Settings reset")}),
   backTo("main")];
 }
